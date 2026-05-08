@@ -112,6 +112,101 @@ const LAYOUTS = [
   { id: 'bold', label: 'Bold' },
 ];
 
+// ─── Plans & Credits ─────────────────────────────────────────────────────────
+
+const INITIAL_CREDITS = 25;
+
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || '';
+
+const PLANS = [
+  {
+    id: 'free',
+    name: 'Free',
+    price: 0,
+    images: 25,
+    badge: null,
+    highlight: false,
+    features: [
+      '25 image generations (lifetime)',
+      'Unlimited text AI',
+      'All book types',
+      'KDP export tools',
+      'Cover designer',
+    ],
+  },
+  {
+    id: 'starter',
+    name: 'Starter',
+    price: 9,
+    images: 100,
+    badge: null,
+    highlight: false,
+    features: [
+      '100 image generations/month',
+      'Unlimited text AI',
+      'All book types',
+      'KDP export tools',
+      'Cover designer',
+      'Priority support',
+    ],
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    price: 19,
+    images: 500,
+    badge: 'Most Popular',
+    highlight: true,
+    features: [
+      '500 image generations/month',
+      'Unlimited text AI',
+      'All book types',
+      'KDP export tools',
+      'Cover designer',
+      'Priority support',
+      'Batch illustration',
+    ],
+  },
+  {
+    id: 'unlimited',
+    name: 'Unlimited',
+    price: 39,
+    images: Infinity,
+    badge: null,
+    highlight: false,
+    features: [
+      'Unlimited image generations',
+      'Unlimited text AI',
+      'All book types',
+      'KDP export tools',
+      'Cover designer',
+      'Priority support',
+      'Batch illustration',
+      'Early access to new features',
+    ],
+  },
+];
+
+const creditLS = {
+  getCredits: () => {
+    try {
+      const v = localStorage.getItem('bookforge:credits');
+      return v !== null ? parseInt(v, 10) : null;
+    } catch {
+      return null;
+    }
+  },
+  setCredits: (n) => {
+    try { localStorage.setItem('bookforge:credits', String(n)); } catch {}
+  },
+  getEmail: () => {
+    try { return localStorage.getItem('bookforge:email') || ''; } catch { return ''; }
+  },
+  setEmail: (e) => {
+    try { localStorage.setItem('bookforge:email', e); } catch {}
+  },
+};
+
 // ─── Storage ──────────────────────────────────────────────────────────────────
 
 const store = {
@@ -439,7 +534,19 @@ function ErrBanner({ msg, onDismiss }) {
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-function Sidebar({ view, navigate, projectCount }) {
+function Sidebar({ view, navigate, projectCount, credits, isAdmin, userEmail, onEmailChange }) {
+  const [emailDraft, setEmailDraft] = useState(userEmail);
+  const [showEmailInput, setShowEmailInput] = useState(false);
+
+  const creditsLow = !isAdmin && credits <= 5 && credits > 0;
+  const creditsGone = !isAdmin && credits <= 0;
+
+  const navItems = [
+    { id: 'dashboard', icon: '⊞', label: 'Dashboard' },
+    { id: 'wizard', icon: '✦', label: 'New Book' },
+    { id: 'pricing', icon: '💎', label: 'Pricing' },
+  ];
+
   return (
     <aside
       style={{
@@ -476,14 +583,65 @@ function Sidebar({ view, navigate, projectCount }) {
             <div style={{ fontSize: 11, color: T.textMuted }}>AI Studio</div>
           </div>
         </div>
+
+        {/* Credit badge */}
+        <div
+          style={{
+            marginTop: 14,
+            padding: '8px 12px',
+            borderRadius: 8,
+            background: creditsGone ? T.errorBg : creditsLow ? '#2a1f00' : T.accentBg,
+            border: `1px solid ${creditsGone ? T.error + '60' : creditsLow ? T.warning + '60' : T.accent + '40'}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 7,
+          }}
+        >
+          <span style={{ fontSize: 14 }}>🎨</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: creditsGone ? T.error : creditsLow ? T.warning : T.accent,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {isAdmin ? 'Unlimited credits' : creditsGone ? 'No credits left' : `${credits} credit${credits === 1 ? '' : 's'} left`}
+            </div>
+            <div style={{ fontSize: 10, color: T.textFaint }}>
+              {isAdmin ? 'Admin account' : 'Image generations'}
+            </div>
+          </div>
+          {creditsGone && !isAdmin && (
+            <button
+              onClick={() => navigate('pricing')}
+              style={{
+                background: T.error,
+                border: 'none',
+                color: '#fff',
+                borderRadius: 6,
+                padding: '3px 8px',
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                flexShrink: 0,
+              }}
+            >
+              Upgrade
+            </button>
+          )}
+        </div>
       </div>
 
       <nav style={{ padding: '14px 10px', flex: 1 }}>
-        {[
-          { id: 'dashboard', icon: '⊞', label: 'Dashboard' },
-          { id: 'wizard', icon: '✦', label: 'New Book' },
-        ].map((item) => {
-          const active = view === item.id || (item.id === 'dashboard' && ['editor', 'cover', 'preview', 'export'].includes(view));
+        {navItems.map((item) => {
+          const active =
+            view === item.id ||
+            (item.id === 'dashboard' && ['editor', 'cover', 'preview', 'export'].includes(view));
           return (
             <button
               key={item.id}
@@ -531,8 +689,58 @@ function Sidebar({ view, navigate, projectCount }) {
         })}
       </nav>
 
-      <div style={{ padding: '14px 18px', borderTop: `1px solid ${T.border}` }}>
-        <div style={{ fontSize: 11, color: T.textFaint }}>Powered by Claude Sonnet</div>
+      <div style={{ padding: '12px 14px', borderTop: `1px solid ${T.border}` }}>
+        {showEmailInput ? (
+          <div>
+            <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 6 }}>Your email (for admin access)</div>
+            <input
+              value={emailDraft}
+              onChange={(e) => setEmailDraft(e.target.value)}
+              onBlur={() => {
+                onEmailChange(emailDraft.trim());
+                setShowEmailInput(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  onEmailChange(emailDraft.trim());
+                  setShowEmailInput(false);
+                }
+                if (e.key === 'Escape') setShowEmailInput(false);
+              }}
+              autoFocus
+              placeholder="you@example.com"
+              style={{
+                width: '100%',
+                background: T.surface3,
+                border: `1px solid ${T.border}`,
+                borderRadius: 6,
+                padding: '6px 9px',
+                color: T.text,
+                fontSize: 12,
+                fontFamily: 'inherit',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+        ) : (
+          <button
+            onClick={() => { setEmailDraft(userEmail); setShowEmailInput(true); }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: T.textFaint,
+              fontSize: 11,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              padding: 0,
+              width: '100%',
+              textAlign: 'left',
+            }}
+          >
+            {userEmail ? `⚙ ${userEmail}` : '⚙ Set email…'}
+          </button>
+        )}
       </div>
     </aside>
   );
@@ -1278,6 +1486,211 @@ function ToggleChip({ children, active, onClick, style = {} }) {
   );
 }
 
+// ─── Toast ────────────────────────────────────────────────────────────────────
+
+function Toast({ msg, onDone }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 3800);
+    return () => clearTimeout(t);
+  }, [onDone]);
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        bottom: 30,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        background: T.surface2,
+        border: `1px solid ${T.border}`,
+        borderRadius: 12,
+        padding: '13px 24px',
+        color: T.text,
+        fontSize: 14,
+        fontWeight: 500,
+        boxShadow: '0 10px 36px rgba(0,0,0,0.6)',
+        zIndex: 9999,
+        animation: 'fadeIn 0.2s ease',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <span style={{ fontSize: 18 }}>⚠️</span>
+      {msg}
+    </div>
+  );
+}
+
+// ─── Paywall Modal ────────────────────────────────────────────────────────────
+
+function PaywallModal({ onClose, onViewPricing }) {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.72)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9990,
+        backdropFilter: 'blur(6px)',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: T.surface,
+          border: `1px solid ${T.border}`,
+          borderRadius: 18,
+          padding: '40px 36px',
+          maxWidth: 420,
+          width: '90%',
+          textAlign: 'center',
+          animation: 'fadeIn 0.2s ease',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ fontSize: 52, marginBottom: 18 }}>🎨</div>
+        <h2 style={{ fontSize: 22, fontWeight: 800, color: T.text, marginBottom: 12, letterSpacing: '-0.02em' }}>
+          You&apos;ve used all free credits
+        </h2>
+        <p style={{ color: T.textMuted, fontSize: 14, lineHeight: 1.75, marginBottom: 30 }}>
+          Your 25 free illustration credits are gone. Upgrade to keep generating
+          illustrations — all text AI features remain free forever.
+        </p>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Btn size="lg" onClick={onViewPricing}>
+            View Plans
+          </Btn>
+          <Btn variant="secondary" size="lg" onClick={onClose}>
+            Maybe later
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Pricing Page ─────────────────────────────────────────────────────────────
+
+function PlanCard({ plan }) {
+  return (
+    <div
+      style={{
+        background: plan.highlight ? T.accentBg2 : T.surface2,
+        border: `2px solid ${plan.highlight ? T.accent : T.border}`,
+        borderRadius: 16,
+        padding: 28,
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {plan.badge && (
+        <div
+          style={{
+            position: 'absolute',
+            top: -12,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: T.accent,
+            color: '#fff',
+            fontSize: 11,
+            fontWeight: 700,
+            padding: '3px 14px',
+            borderRadius: 20,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {plan.badge}
+        </div>
+      )}
+      <div style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 8 }}>{plan.name}</div>
+      <div style={{ marginBottom: 22 }}>
+        <span style={{ fontSize: 38, fontWeight: 800, color: plan.highlight ? T.accent : T.text }}>
+          ${plan.price}
+        </span>
+        {plan.price > 0 && (
+          <span style={{ fontSize: 14, color: T.textMuted }}>/month</span>
+        )}
+      </div>
+      <ul style={{ listStyle: 'none', marginBottom: 28, flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {plan.features.map((f) => (
+          <li key={f} style={{ fontSize: 13, color: T.textMuted, display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+            <span style={{ color: T.success, flexShrink: 0, marginTop: 1 }}>✓</span>
+            {f}
+          </li>
+        ))}
+      </ul>
+      <div style={{ position: 'relative' }}>
+        <Btn
+          variant={plan.highlight ? 'primary' : 'outline'}
+          disabled
+          style={{ width: '100%', justifyContent: 'center', pointerEvents: 'none' }}
+        >
+          {plan.price === 0 ? 'Current Plan' : 'Subscribe'}
+        </Btn>
+        {plan.price > 0 && (
+          <div
+            style={{
+              position: 'absolute',
+              top: -9,
+              right: -4,
+              background: T.warning,
+              color: '#000',
+              fontSize: 10,
+              fontWeight: 800,
+              padding: '2px 9px',
+              borderRadius: 20,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Coming Soon
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PricingPage({ onBack }) {
+  return (
+    <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <DashHeader title="Pricing">
+        <Btn variant="secondary" onClick={onBack}>
+          ← Back
+        </Btn>
+      </DashHeader>
+      <div style={{ flex: 1, overflow: 'auto', padding: '36px 36px' }}>
+        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <p style={{ color: T.textMuted, fontSize: 15, lineHeight: 1.6 }}>
+            Text generation is always <strong style={{ color: T.success }}>free</strong> and unlimited.
+            Credits apply only to AI illustration generation.
+          </p>
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: 24,
+            maxWidth: 980,
+            margin: '0 auto',
+          }}
+        >
+          {PLANS.map((plan) => (
+            <PlanCard key={plan.id} plan={plan} />
+          ))}
+        </div>
+        <p style={{ textAlign: 'center', color: T.textFaint, fontSize: 12, marginTop: 36 }}>
+          Payments not yet enabled. Subscribe buttons will activate in a future update.
+        </p>
+      </div>
+    </main>
+  );
+}
+
 // ─── Editor Tab Bar ───────────────────────────────────────────────────────────
 
 function EditorTabBar({ view, setView }) {
@@ -1323,7 +1736,7 @@ function EditorTabBar({ view, setView }) {
 
 // ─── Book Editor ──────────────────────────────────────────────────────────────
 
-function BookEditor({ project, onUpdate, onBack, subView, setSubView }) {
+function BookEditor({ project, onUpdate, onBack, subView, setSubView, credits, isAdmin, onUseCredit, onShowPaywall }) {
   const [pages, setPages] = useState([...(project.pages || [])].sort((a, b) => a.order - b.order));
   const [selId, setSelId] = useState(pages[0]?.id || null);
   const [aiLoading, setAiLoading] = useState({});
@@ -1418,6 +1831,10 @@ Return exactly: {"pages":[{"title":"string","content":"string"}]} with 5 entries
   const generateIllustration = async (pageId) => {
     const page = pages.find((p) => p.id === pageId);
     if (!page) return;
+    if (!isAdmin && credits <= 0) {
+      onShowPaywall();
+      return;
+    }
     const key = pageId + 'illustrate';
     setAiLoading((l) => ({ ...l, [key]: true }));
     try {
@@ -1445,6 +1862,7 @@ ${isColoring
       const svgMatch = result.match(/<svg[\s\S]*?<\/svg>/i);
       if (svgMatch) {
         updatePage(pageId, { illustration: svgMatch[0] });
+        onUseCredit();
       }
     } catch {}
     setAiLoading((l) => ({ ...l, [key]: false }));
@@ -1717,15 +2135,39 @@ ${isColoring
                     {label}
                   </Btn>
                 ))}
-                <Btn
-                  variant="outline"
-                  size="sm"
-                  loading={!!aiLoading[selPage.id + 'illustrate']}
-                  onClick={() => generateIllustration(selPage.id)}
-                  title={`Generate a ${project.type === 'coloring' ? 'coloring book line-art' : 'colorful scene'} illustration`}
-                >
-                  {selPage.illustration ? '✦ Regenerate Illustration' : '✦ Generate Illustration'}
-                </Btn>
+                <div style={{ position: 'relative', display: 'inline-flex' }}>
+                  <Btn
+                    variant={!isAdmin && credits <= 0 ? 'secondary' : 'outline'}
+                    size="sm"
+                    loading={!!aiLoading[selPage.id + 'illustrate']}
+                    onClick={() => generateIllustration(selPage.id)}
+                    title={
+                      !isAdmin && credits <= 0
+                        ? 'No illustration credits remaining — upgrade to continue'
+                        : `Generate a ${project.type === 'coloring' ? 'coloring book line-art' : 'colorful scene'} illustration`
+                    }
+                  >
+                    {selPage.illustration ? '✦ Regenerate Illustration' : '✦ Generate Illustration'}
+                  </Btn>
+                  {!isAdmin && credits <= 0 && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: -7,
+                        right: -7,
+                        background: T.error,
+                        color: '#fff',
+                        fontSize: 9,
+                        fontWeight: 800,
+                        padding: '1px 6px',
+                        borderRadius: 20,
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      0 left
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Page Preview */}
@@ -2590,6 +3032,40 @@ export default function BookForgeApp() {
   const [selectedId, setSelectedId] = useState(null);
   const [loaded, setLoaded] = useState(false);
 
+  // Credits & identity
+  const [credits, setCredits] = useState(INITIAL_CREDITS);
+  const [userEmail, setUserEmail] = useState('');
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const isAdmin = Boolean(
+    ADMIN_EMAIL && userEmail && userEmail.toLowerCase() === ADMIN_EMAIL.toLowerCase()
+  );
+
+  useEffect(() => {
+    const stored = creditLS.getCredits();
+    setCredits(stored !== null ? stored : INITIAL_CREDITS);
+    if (stored === null) creditLS.setCredits(INITIAL_CREDITS);
+    setUserEmail(creditLS.getEmail());
+  }, []);
+
+  const handleEmailChange = (email) => {
+    setUserEmail(email);
+    creditLS.setEmail(email);
+  };
+
+  const handleUseCredit = useCallback(() => {
+    if (isAdmin) return;
+    setCredits((prev) => {
+      const next = Math.max(0, prev - 1);
+      creditLS.setCredits(next);
+      if (next === 5) setToast('5 illustration credits remaining — consider upgrading!');
+      if (next === 1) setToast('Only 1 illustration credit left!');
+      if (next === 0) setToast('You\'ve used your last illustration credit.');
+      return next;
+    });
+  }, [isAdmin]);
+
   useEffect(() => {
     (async () => {
       const saved = await store.get('bookforge:projects');
@@ -2655,6 +3131,8 @@ export default function BookForgeApp() {
     } else if (dest === 'dashboard') {
       setSelectedId(null);
       setView('dashboard');
+    } else if (dest === 'pricing') {
+      setView('pricing');
     }
   };
 
@@ -2674,6 +3152,10 @@ export default function BookForgeApp() {
       setSubView(v);
       setView(v);
     },
+    credits,
+    isAdmin,
+    onUseCredit: handleUseCredit,
+    onShowPaywall: () => setShowPaywall(true),
   };
 
   return (
@@ -2682,6 +3164,10 @@ export default function BookForgeApp() {
         view={view}
         navigate={navigate}
         projectCount={projects.length}
+        credits={credits}
+        isAdmin={isAdmin}
+        userEmail={userEmail}
+        onEmailChange={handleEmailChange}
       />
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -2700,6 +3186,10 @@ export default function BookForgeApp() {
             onComplete={handleWizardComplete}
             onCancel={() => setView('dashboard')}
           />
+        )}
+
+        {view === 'pricing' && (
+          <PricingPage onBack={() => setView('dashboard')} />
         )}
 
         {view === 'editor' && currentProject && (
@@ -2733,6 +3223,17 @@ export default function BookForgeApp() {
           </div>
         )}
       </div>
+
+      {showPaywall && (
+        <PaywallModal
+          onClose={() => setShowPaywall(false)}
+          onViewPricing={() => { setShowPaywall(false); navigate('pricing'); }}
+        />
+      )}
+
+      {toast && (
+        <Toast msg={toast} onDone={() => setToast(null)} />
+      )}
     </div>
   );
 }
