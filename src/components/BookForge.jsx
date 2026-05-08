@@ -1415,6 +1415,76 @@ Return exactly: {"pages":[{"title":"string","content":"string"}]} with 5 entries
     setAiLoading((l) => ({ ...l, bulk: false }));
   };
 
+  const generateIllustration = async (pageId) => {
+    const page = pages.find((p) => p.id === pageId);
+    if (!page) return;
+    const key = pageId + 'illustrate';
+    setAiLoading((l) => ({ ...l, [key]: true }));
+    try {
+      const isColoring = project.type === 'coloring';
+      const system = isColoring
+        ? 'You are an SVG illustrator for coloring books. Generate clean SVG with bold black outlines (stroke-width 3-5), fill="none" or fill="white" only — no color fills. White background. Thick, clear lines suitable for printing and coloring with crayons or markers.'
+        : 'You are an SVG illustrator for children\'s storybooks. Generate colorful, friendly SVG scenes with simple shapes, vibrant fills, and clear outlines. Use cheerful, age-appropriate imagery.';
+      const info = typeInfo(project.type);
+      const userMsg = `Create an SVG illustration for a ${info.label} page.
+Book title: "${project.title}"
+Theme: ${project.theme}
+Audience: ${project.ageGroup}
+Page title: "${page.title}"
+Page description: "${page.content || page.title}"
+
+Requirements:
+- viewBox="0 0 400 300", width="400", height="300"
+- Self-contained SVG (no external resources, no scripts)
+${isColoring
+  ? '- Bold outlines only: stroke="black" stroke-width="3" to stroke-width="5", fill="none" or fill="white"\n- Simple, clear line art perfect for coloring'
+  : '- Colorful fills with stroke outlines\n- Bright, cheerful palette\n- Simple friendly shapes'}
+- Return ONLY the SVG markup starting with <svg and ending with </svg>`;
+
+      const result = await callClaude(system, userMsg, 4096);
+      const svgMatch = result.match(/<svg[\s\S]*?<\/svg>/i);
+      if (svgMatch) {
+        updatePage(pageId, { illustration: svgMatch[0] });
+      }
+    } catch {}
+    setAiLoading((l) => ({ ...l, [key]: false }));
+  };
+
+  const downloadSVG = (page) => {
+    const blob = new Blob([page.illustration], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(page.title || 'illustration').replace(/[^a-z0-9]/gi, '_')}.svg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadPNG = (page) => {
+    const blob = new Blob([page.illustration], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 600;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 800, 600);
+      ctx.drawImage(img, 0, 0, 800, 600);
+      URL.revokeObjectURL(url);
+      const a = document.createElement('a');
+      a.download = `${(page.title || 'illustration').replace(/[^a-z0-9]/gi, '_')}.png`;
+      a.href = canvas.toDataURL('image/png');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    };
+    img.src = url;
+  };
+
   const handleDrop = (targetId) => {
     if (!dragId || dragId === targetId) {
       setDragId(null);
@@ -1566,6 +1636,9 @@ Return exactly: {"pages":[{"title":"string","content":"string"}]} with 5 entries
                     }}
                   >
                     {page.title || `Page ${i + 1}`}
+                    {page.illustration && (
+                      <span style={{ marginLeft: 5, fontSize: 9, color: T.success, verticalAlign: 'middle' }} title="Has illustration">⬛</span>
+                    )}
                   </div>
                   {page.content && (
                     <div
@@ -1644,55 +1717,119 @@ Return exactly: {"pages":[{"title":"string","content":"string"}]} with 5 entries
                     {label}
                   </Btn>
                 ))}
+                <Btn
+                  variant="outline"
+                  size="sm"
+                  loading={!!aiLoading[selPage.id + 'illustrate']}
+                  onClick={() => generateIllustration(selPage.id)}
+                  title={`Generate a ${project.type === 'coloring' ? 'coloring book line-art' : 'colorful scene'} illustration`}
+                >
+                  {selPage.illustration ? '✦ Regenerate Illustration' : '✦ Generate Illustration'}
+                </Btn>
               </div>
 
               {/* Page Preview */}
               <Field label="Page Preview">
-                <div
-                  style={{
-                    background: '#fff',
-                    borderRadius: 6,
-                    padding: '28px 32px',
-                    maxWidth: 340,
-                    boxShadow: '0 6px 28px rgba(0,0,0,0.35)',
-                    aspectRatio: trimAspect,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    position: 'relative',
-                  }}
-                >
-                  <div style={{ fontSize: 9, color: '#bbb', textAlign: 'center', marginBottom: 10 }}>
-                    {project.trimSize} · {project.interiorStyle}-sided
-                  </div>
+                {aiLoading[selPage.id + 'illustrate'] ? (
                   <div
                     style={{
-                      fontSize: 12,
-                      fontWeight: 800,
-                      color: '#111',
-                      textAlign: 'center',
-                      marginBottom: 10,
-                      lineHeight: 1.3,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '18px 22px',
+                      background: T.accentBg,
+                      borderRadius: 10,
+                      border: `1px solid ${T.accent}40`,
+                      maxWidth: 340,
                     }}
                   >
-                    {selPage.title}
+                    <Spinner size={22} />
+                    <span style={{ color: T.accent, fontSize: 13 }}>
+                      Generating {project.type === 'coloring' ? 'line-art' : 'scene'} illustration…
+                    </span>
                   </div>
-                  <div style={{ fontSize: 10, color: '#555', lineHeight: 1.7, flex: 1 }}>
-                    {selPage.content || (
-                      <span style={{ color: '#ccc', fontStyle: 'italic' }}>No content yet…</span>
+                ) : (
+                  <div
+                    style={{
+                      background: '#fff',
+                      borderRadius: 6,
+                      padding: selPage.illustration ? '16px 16px 10px' : '28px 32px',
+                      maxWidth: 340,
+                      boxShadow: '0 6px 28px rgba(0,0,0,0.35)',
+                      aspectRatio: trimAspect,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      position: 'relative',
+                    }}
+                  >
+                    <div style={{ fontSize: 9, color: '#bbb', textAlign: 'center', marginBottom: 8 }}>
+                      {project.trimSize} · {project.interiorStyle}-sided
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 800,
+                        color: '#111',
+                        textAlign: 'center',
+                        marginBottom: 8,
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {selPage.title}
+                    </div>
+                    {selPage.illustration ? (
+                      <div
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
+                        dangerouslySetInnerHTML={{ __html: selPage.illustration }}
+                      />
+                    ) : (
+                      <div style={{ fontSize: 10, color: '#555', lineHeight: 1.7, flex: 1 }}>
+                        {selPage.content || (
+                          <span style={{ color: '#ccc', fontStyle: 'italic' }}>No content yet…</span>
+                        )}
+                      </div>
                     )}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: 10,
+                        right: 14,
+                        fontSize: 9,
+                        color: '#ccc',
+                      }}
+                    >
+                      {pages.findIndex((p) => p.id === selPage.id) + 1}
+                    </div>
                   </div>
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: 10,
-                      right: 14,
-                      fontSize: 9,
-                      color: '#ccc',
-                    }}
-                  >
-                    {pages.findIndex((p) => p.id === selPage.id) + 1}
+                )}
+
+                {/* Illustration controls */}
+                {selPage.illustration && !aiLoading[selPage.id + 'illustrate'] && (
+                  <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
+                    <Btn
+                      variant="secondary"
+                      size="xs"
+                      loading={!!aiLoading[selPage.id + 'illustrate']}
+                      onClick={() => generateIllustration(selPage.id)}
+                    >
+                      ↺ Regenerate
+                    </Btn>
+                    <Btn variant="secondary" size="xs" onClick={() => downloadSVG(selPage)}>
+                      ↓ SVG
+                    </Btn>
+                    <Btn variant="secondary" size="xs" onClick={() => downloadPNG(selPage)}>
+                      ↓ PNG
+                    </Btn>
+                    <Btn
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => updatePage(selPage.id, { illustration: null })}
+                      style={{ color: T.error }}
+                    >
+                      × Remove
+                    </Btn>
                   </div>
-                </div>
+                )}
               </Field>
 
               <Field label="Private Notes">
