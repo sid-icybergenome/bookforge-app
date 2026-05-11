@@ -21,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${jakarta.variable} h-full`}>
-      <body className="h-full" style={{ fontFamily: "var(--font-jakarta), sans-serif" }}>
+      <body className="h-full" suppressHydrationWarning style={{ fontFamily: "var(--font-jakarta), sans-serif" }}>
         {children}
       </body>
     </html>

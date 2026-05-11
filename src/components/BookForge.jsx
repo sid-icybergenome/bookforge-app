@@ -5,57 +5,37 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 // ─── Theme ────────────────────────────────────────────────────────────────────
 
 const T = {
-  bg: '#0f1117',
-  surface: '#181b28',
-  surface2: '#1f2235',
-  surface3: '#272b42',
-  border: '#2a2f4a',
-  accent: '#a78bfa',
-  accentHover: '#c4b5fd',
-  accentBg: '#1e1b4b',
-  accentBg2: '#2d265a',
-  text: '#e2e8f0',
-  textMuted: '#8892a4',
-  textFaint: '#3d4568',
-  success: '#10b981',
-  warning: '#f59e0b',
-  error: '#ef4444',
-  errorBg: '#3b0d0d',
+  bg: '#F9F9F9',
+  surface: '#FFFFFF',
+  surface2: '#F9F9F9',
+  surface3: '#F0F0F0',
+  border: '#E5E5E5',
+  accent: '#FF9900',
+  accentHover: '#E68A00',
+  accentBg: '#FFF8EC',
+  accentBg2: '#FFEDBA',
+  text: '#111111',
+  textMuted: '#555555',
+  textFaint: '#AAAAAA',
+  success: '#067D62',
+  warning: '#D97706',
+  error: '#DC2626',
+  errorBg: '#FEF2F2',
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const BOOK_TYPES = [
-  {
-    id: 'coloring',
-    label: 'Coloring Book',
-    icon: '🎨',
-    desc: 'Line-art pages for kids or adults — bold outlines, simple shapes, or intricate designs',
-  },
-  {
-    id: 'storybook',
-    label: 'Kids Storybook',
-    icon: '📖',
-    desc: 'Age-appropriate stories written page-by-page with scene and illustration descriptions',
-  },
-  {
-    id: 'activity',
-    label: 'Activity Book',
-    icon: '✏️',
-    desc: 'Mazes, dot-to-dot, tracing, matching, alphabet & number practice pages',
-  },
-  {
-    id: 'nonfiction',
-    label: 'Non-Fiction / How-To',
-    icon: '📚',
-    desc: 'Structured chapters, outlines, and body content for guides and educational books',
-  },
-  {
-    id: 'journal',
-    label: 'Journal & Planner',
-    icon: '📔',
-    desc: 'Prompts, trackers, log templates, and planner layouts for daily use',
-  },
+  { id: 'coloring', label: 'Coloring Book', icon: '🎨', featured: true,
+    desc: 'Line-art pages for kids or adults — bold outlines, simple shapes, or intricate designs' },
+  { id: 'journal',  label: 'Journal & Planner', icon: '📓', featured: true,
+    desc: 'Prompts, trackers, log templates, and planner layouts for daily use' },
+  { id: 'storybook', label: 'Kids Storybook', icon: '📖', featured: false,
+    desc: 'Age-appropriate stories written page-by-page with scene and illustration descriptions' },
+  { id: 'activity',  label: 'Activity Book', icon: '✏️', featured: false,
+    desc: 'Mazes, dot-to-dot, tracing, matching, alphabet & number practice pages' },
+  { id: 'nonfiction', label: 'Non-Fiction / How-To', icon: '📚', featured: false,
+    desc: 'Structured chapters, outlines, and body content for guides and educational books' },
 ];
 
 const AGE_GROUPS = [
@@ -68,11 +48,14 @@ const AGE_GROUPS = [
 ];
 
 const TRIM_SIZES = [
-  { id: '6x9', label: '6 × 9 in', desc: 'Standard' },
-  { id: '8x10', label: '8 × 10 in', desc: 'Square-ish' },
-  { id: '8.5x11', label: '8.5 × 11 in', desc: 'Full page' },
-  { id: '5x8', label: '5 × 8 in', desc: 'Pocket' },
-  { id: '5.5x8.5', label: '5.5 × 8.5 in', desc: 'Half letter' },
+  { id: '5x8',       label: '5″ × 8″',      desc: 'Novels & Journals' },
+  { id: '5.5x8.5',   label: '5.5″ × 8.5″',  desc: 'Digest / Most Popular' },
+  { id: '6x9',       label: '6″ × 9″',       desc: 'Standard Trade', popular: true },
+  { id: '6.14x9.21', label: '6.14″ × 9.21″', desc: 'Trade Paperback' },
+  { id: '7x10',      label: '7″ × 10″',      desc: 'Workbooks & Guides' },
+  { id: '8x8.5',     label: '8″ × 8.5″',     desc: 'Square Activity' },
+  { id: '8.5x8.5',   label: '8.5″ × 8.5″',   desc: 'Square Coloring' },
+  { id: '8.5x11',    label: '8.5″ × 11″',    desc: 'Large Activity / Coloring' },
 ];
 
 const THEME_SUGGESTIONS = {
@@ -283,7 +266,7 @@ function Spinner({ size = 18 }) {
         display: 'inline-block',
         width: size,
         height: size,
-        border: `2px solid ${T.accentBg2}`,
+        border: `2px solid #FFE8B3`,
         borderTopColor: T.accent,
         borderRadius: '50%',
         animation: 'spin 0.65s linear infinite',
@@ -310,19 +293,11 @@ function Btn({
     lg: { padding: '12px 26px', fontSize: 15, gap: 7 },
   };
   const vars = {
-    primary: { background: T.accent, color: '#fff', border: 'none' },
-    secondary: {
-      background: T.surface3,
-      color: T.text,
-      border: `1px solid ${T.border}`,
-    },
+    primary: { background: T.accent, color: '#111111', border: 'none' },
+    secondary: { background: T.surface3, color: T.text, border: `1px solid ${T.border}` },
     ghost: { background: 'transparent', color: T.textMuted, border: 'none' },
     danger: { background: T.error, color: '#fff', border: 'none' },
-    outline: {
-      background: 'transparent',
-      color: T.accent,
-      border: `1px solid ${T.accent}`,
-    },
+    outline: { background: 'transparent', color: T.accent, border: `1px solid ${T.accent}` },
   };
   const off = disabled || loading;
   return (
@@ -467,7 +442,7 @@ function Card({ children, style = {}, onClick, hoverable }) {
         borderRadius: 12,
         transition: 'all 0.15s',
         transform: hov ? 'translateY(-2px)' : 'none',
-        boxShadow: hov ? `0 8px 24px rgba(0,0,0,0.25)` : 'none',
+        boxShadow: hov ? `0 4px 16px rgba(0,0,0,0.08)` : `0 1px 4px rgba(0,0,0,0.05)`,
         cursor: onClick ? 'pointer' : 'default',
         ...style,
       }}
@@ -532,14 +507,86 @@ function ErrBanner({ msg, onDismiss }) {
   );
 }
 
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
+// ─── TopBar ───────────────────────────────────────────────────────────────────
 
-function Sidebar({ view, navigate, projectCount, credits, isAdmin, userEmail, onEmailChange }) {
-  const [emailDraft, setEmailDraft] = useState(userEmail);
-  const [showEmailInput, setShowEmailInput] = useState(false);
-
+function TopBar({ navigate, onNew, credits, isAdmin }) {
   const creditsLow = !isAdmin && credits <= 5 && credits > 0;
   const creditsGone = !isAdmin && credits <= 0;
+  return (
+    <div
+      style={{
+        height: 56,
+        background: T.surface,
+        borderBottom: `1px solid ${T.border}`,
+        display: 'flex',
+        alignItems: 'center',
+        padding: '0 24px',
+        gap: 16,
+        flexShrink: 0,
+        boxShadow: '0 1px 0 #E5E5E5',
+        zIndex: 100,
+      }}
+    >
+      {/* Logo */}
+      <button
+        onClick={() => navigate('dashboard')}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 9,
+          background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+        }}
+      >
+        <div
+          style={{
+            width: 32, height: 32, borderRadius: 8,
+            background: 'linear-gradient(135deg,#FF9900,#E65A00)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 16,
+          }}
+        >
+          📚
+        </div>
+        <span style={{ fontWeight: 800, fontSize: 16, color: T.text, letterSpacing: '-0.02em' }}>
+          BookForge
+        </span>
+      </button>
+
+      <div style={{ flex: 1 }} />
+
+      {/* Credits */}
+      <button
+        onClick={() => navigate('pricing')}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: creditsGone ? T.errorBg : creditsLow ? '#FFF3E0' : T.accentBg,
+          border: `1px solid ${creditsGone ? T.error + '40' : creditsLow ? T.warning + '40' : T.accent + '40'}`,
+          borderRadius: 20, padding: '5px 14px',
+          cursor: 'pointer', fontFamily: 'inherit',
+        }}
+      >
+        <span style={{ fontSize: 14 }}>🎨</span>
+        <span style={{
+          fontSize: 13, fontWeight: 600,
+          color: creditsGone ? T.error : creditsLow ? T.warning : T.accent,
+        }}>
+          {isAdmin ? 'Unlimited' : creditsGone ? 'No credits' : `${credits} credit${credits === 1 ? '' : 's'}`}
+        </span>
+      </button>
+
+      <div style={{ flex: 1 }} />
+
+      {/* New Book */}
+      <Btn onClick={onNew} size="sm">
+        + New Book
+      </Btn>
+    </div>
+  );
+}
+
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+
+function Sidebar({ view, navigate, projectCount, userEmail, onEmailChange }) {
+  const [emailDraft, setEmailDraft] = useState(userEmail);
+  const [showEmailInput, setShowEmailInput] = useState(false);
 
   const navItems = [
     { id: 'dashboard', icon: '⊞', label: 'Dashboard' },
@@ -548,96 +595,8 @@ function Sidebar({ view, navigate, projectCount, credits, isAdmin, userEmail, on
   ];
 
   return (
-    <aside
-      style={{
-        width: 220,
-        flexShrink: 0,
-        background: T.surface,
-        borderRight: `1px solid ${T.border}`,
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-      }}
-    >
-      <div style={{ padding: '22px 18px 20px', borderBottom: `1px solid ${T.border}` }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-          <div
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: 10,
-              background: 'linear-gradient(135deg,#a78bfa,#7c3aed)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 19,
-              boxShadow: '0 4px 12px rgba(124,58,237,0.4)',
-            }}
-          >
-            📚
-          </div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 16, color: T.text, letterSpacing: '-0.02em' }}>
-              BookForge
-            </div>
-            <div style={{ fontSize: 11, color: T.textMuted }}>AI Studio</div>
-          </div>
-        </div>
-
-        {/* Credit badge */}
-        <div
-          style={{
-            marginTop: 14,
-            padding: '8px 12px',
-            borderRadius: 8,
-            background: creditsGone ? T.errorBg : creditsLow ? '#2a1f00' : T.accentBg,
-            border: `1px solid ${creditsGone ? T.error + '60' : creditsLow ? T.warning + '60' : T.accent + '40'}`,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 7,
-          }}
-        >
-          <span style={{ fontSize: 14 }}>🎨</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                color: creditsGone ? T.error : creditsLow ? T.warning : T.accent,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {isAdmin ? 'Unlimited credits' : creditsGone ? 'No credits left' : `${credits} credit${credits === 1 ? '' : 's'} left`}
-            </div>
-            <div style={{ fontSize: 10, color: T.textFaint }}>
-              {isAdmin ? 'Admin account' : 'Image generations'}
-            </div>
-          </div>
-          {creditsGone && !isAdmin && (
-            <button
-              onClick={() => navigate('pricing')}
-              style={{
-                background: T.error,
-                border: 'none',
-                color: '#fff',
-                borderRadius: 6,
-                padding: '3px 8px',
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                flexShrink: 0,
-              }}
-            >
-              Upgrade
-            </button>
-          )}
-        </div>
-      </div>
-
-      <nav style={{ padding: '14px 10px', flex: 1 }}>
+    <aside style={{ width: 200, flexShrink: 0, background: T.surface, borderRight: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', height: '100%', paddingTop: 8 }}>
+      <nav style={{ padding: '8px 10px', flex: 1 }}>
         {navItems.map((item) => {
           const active =
             view === item.id ||
@@ -1222,6 +1181,8 @@ Each "content" should be 2-4 sentences describing what appears on the page. Gene
 }
 
 function WStep1({ data, set }) {
+  const featured = BOOK_TYPES.filter((t) => t.featured);
+  const coming = BOOK_TYPES.filter((t) => !t.featured);
   return (
     <div>
       <div style={{ fontSize: 17, fontWeight: 700, color: T.text, marginBottom: 6 }}>
@@ -1230,25 +1191,63 @@ function WStep1({ data, set }) {
       <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 24 }}>
         Choose the format that best describes your project.
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))', gap: 13 }}>
-        {BOOK_TYPES.map((t) => (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 14, marginBottom: 32 }}>
+        {featured.map((t) => (
           <div
             key={t.id}
             onClick={() => set('type', t.id)}
             style={{
-              padding: '20px 18px',
+              padding: '22px 20px',
               borderRadius: 12,
               border: `2px solid ${data.type === t.id ? T.accent : T.border}`,
               background: data.type === t.id ? T.accentBg : T.surface,
               cursor: 'pointer',
               transition: 'all 0.15s',
+              boxShadow: data.type === t.id ? `0 0 0 3px ${T.accent}25` : 'none',
             }}
           >
-            <div style={{ fontSize: 34, marginBottom: 10 }}>{t.icon}</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 5 }}>{t.label}</div>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>{t.icon}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 6 }}>{t.label}</div>
             <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.55 }}>{t.desc}</div>
           </div>
         ))}
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{ flex: 1, height: 1, background: T.border }} />
+          <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 600, whiteSpace: 'nowrap' }}>
+            More types — coming soon
+          </span>
+          <div style={{ flex: 1, height: 1, background: T.border }} />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 10 }}>
+          {coming.map((t) => (
+            <div
+              key={t.id}
+              style={{
+                padding: '16px 16px',
+                borderRadius: 10,
+                border: `1px solid ${T.border}`,
+                background: T.surface2,
+                opacity: 0.55,
+                cursor: 'not-allowed',
+                position: 'relative',
+              }}
+            >
+              <div style={{ fontSize: 28, marginBottom: 8 }}>{t.icon}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: T.textMuted, marginBottom: 4 }}>{t.label}</div>
+              <div style={{ fontSize: 11, color: T.textFaint, lineHeight: 1.45 }}>{t.desc}</div>
+              <div style={{
+                position: 'absolute', top: 10, right: 10,
+                background: T.surface3, color: T.textMuted,
+                fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
+              }}>
+                Soon
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1348,12 +1347,20 @@ function WStep3({ data, set }) {
                 transition: 'all 0.12s',
               }}
             >
-              <div style={{ fontSize: 13, fontWeight: 700, color: data.trimSize === ts.id ? T.accent : T.text }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: data.trimSize === ts.id ? T.accent : T.text, display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
                 {ts.label}
+                {ts.popular && (
+                  <span style={{ fontSize: 9, background: T.accent, color: '#111', borderRadius: 10, padding: '1px 6px', fontWeight: 700 }}>
+                    Popular
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: 11, color: T.textMuted }}>{ts.desc}</div>
             </div>
           ))}
+        </div>
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 8 }}>
+          All sizes are KDP-approved for paperback printing.
         </div>
       </Field>
 
@@ -1742,6 +1749,8 @@ function BookEditor({ project, onUpdate, onBack, subView, setSubView, credits, i
   const [aiLoading, setAiLoading] = useState({});
   const [dragId, setDragId] = useState(null);
   const [dragOver, setDragOver] = useState(null);
+  const [illustrationCandidates, setIllustrationCandidates] = useState(null); // { pageId, a: svgOrNull, b: svgOrNull }
+  const [illustrationError, setIllustrationError] = useState(null); // { pageId, msg }
 
   const selPage = pages.find((p) => p.id === selId);
 
@@ -1920,11 +1929,14 @@ ${isColoring
   };
 
   const trimAspect = {
-    '6x9': '6/9',
-    '8x10': '8/10',
-    '8.5x11': '8.5/11',
     '5x8': '5/8',
     '5.5x8.5': '5.5/8.5',
+    '6x9': '6/9',
+    '6.14x9.21': '6.14/9.21',
+    '7x10': '7/10',
+    '8x8.5': '8/8.5',
+    '8.5x8.5': '1/1',
+    '8.5x11': '8.5/11',
   }[project.trimSize] || '8.5/11';
 
   return (
@@ -3159,13 +3171,18 @@ export default function BookForgeApp() {
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', background: T.bg, fontFamily: 'inherit', overflow: 'hidden' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: T.bg, fontFamily: 'inherit', overflow: 'hidden' }}>
+      <TopBar
+        navigate={navigate}
+        onNew={() => setView('wizard')}
+        credits={credits}
+        isAdmin={isAdmin}
+      />
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
       <Sidebar
         view={view}
         navigate={navigate}
         projectCount={projects.length}
-        credits={credits}
-        isAdmin={isAdmin}
         userEmail={userEmail}
         onEmailChange={handleEmailChange}
       />
@@ -3234,6 +3251,7 @@ export default function BookForgeApp() {
       {toast && (
         <Toast msg={toast} onDone={() => setToast(null)} />
       )}
+      </div>
     </div>
   );
 }

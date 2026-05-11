@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0f1117;
-  --foreground: #e2e8f0;
+  --background: #F9F9F9;
+  --foreground: #111111;
 }
 
 * {
@@ -14,8 +14,6 @@
 html,
 body {
   height: 100%;
-  background: var(--background);
-  color: var(--foreground);
 }
 
 @keyframes spin {
@@ -35,6 +33,11 @@ body {
   }
 }
 
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -43,9 +46,9 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2d3148;
+  background: #D0D0D0;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3d4168;
+  background: #BBBBBB;
 }
