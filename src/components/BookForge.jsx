@@ -48,14 +48,14 @@ const AGE_GROUPS = [
 ];
 
 const TRIM_SIZES = [
-  { id: '5x8',       label: '5″ × 8″',      desc: 'Novels & Journals' },
-  { id: '5.5x8.5',   label: '5.5″ × 8.5″',  desc: 'Digest / Most Popular' },
-  { id: '6x9',       label: '6″ × 9″',       desc: 'Standard Trade', popular: true },
-  { id: '6.14x9.21', label: '6.14″ × 9.21″', desc: 'Trade Paperback' },
-  { id: '7x10',      label: '7″ × 10″',      desc: 'Workbooks & Guides' },
-  { id: '8x8.5',     label: '8″ × 8.5″',     desc: 'Square Activity' },
-  { id: '8.5x8.5',   label: '8.5″ × 8.5″',   desc: 'Square Coloring' },
-  { id: '8.5x11',    label: '8.5″ × 11″',    desc: 'Large Activity / Coloring' },
+  { id: '5x8',       label: '5″ × 8″',       desc: 'Pocket — Novels & Journals' },
+  { id: '5.5x8.5',   label: '5.5″ × 8.5″',   desc: 'Digest — Most popular for journals' },
+  { id: '6x9',       label: '6″ × 9″',        desc: 'Standard Trade', popular: true },
+  { id: '6.14x9.21', label: '6.14″ × 9.21″',  desc: 'Trade Paperback' },
+  { id: '7x10',      label: '7″ × 10″',       desc: 'Workbooks & Guides' },
+  { id: '8x8.5',     label: '8″ × 8.5″',      desc: 'Square Activity' },
+  { id: '8.5x8.5',   label: '8.5″ × 8.5″',    desc: 'Square Coloring' },
+  { id: '8.5x11',    label: '8.5″ × 11″',     desc: 'Letter — Large Coloring / Activity' },
 ];
 
 const THEME_SUGGESTIONS = {
@@ -1351,29 +1351,34 @@ function WStep3({ data, set }) {
       </Field>
 
       <Field label="KDP Trim Size">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(130px,1fr))', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
           {TRIM_SIZES.map((ts) => (
             <div
               key={ts.id}
               onClick={() => set('trimSize', ts.id)}
               style={{
-                padding: '10px 12px',
+                padding: '10px 10px',
                 borderRadius: 8,
-                border: `1px solid ${data.trimSize === ts.id ? T.accent : T.border}`,
+                border: `2px solid ${data.trimSize === ts.id ? T.accent : T.border}`,
                 background: data.trimSize === ts.id ? T.accentBg : T.surface2,
                 cursor: 'pointer',
                 transition: 'all 0.12s',
+                position: 'relative',
               }}
             >
-              <div style={{ fontSize: 13, fontWeight: 700, color: data.trimSize === ts.id ? T.accent : T.text, display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+              {ts.popular && (
+                <span style={{
+                  position: 'absolute', top: -8, left: '50%', transform: 'translateX(-50%)',
+                  fontSize: 9, background: T.accent, color: '#111', borderRadius: 10,
+                  padding: '1px 7px', fontWeight: 700, whiteSpace: 'nowrap',
+                }}>
+                  Most Popular
+                </span>
+              )}
+              <div style={{ fontSize: 13, fontWeight: 700, color: data.trimSize === ts.id ? T.accent : T.text }}>
                 {ts.label}
-                {ts.popular && (
-                  <span style={{ fontSize: 9, background: T.accent, color: '#111', borderRadius: 10, padding: '1px 6px', fontWeight: 700 }}>
-                    Popular
-                  </span>
-                )}
               </div>
-              <div style={{ fontSize: 11, color: T.textMuted }}>{ts.desc}</div>
+              <div style={{ fontSize: 10, color: T.textMuted, marginTop: 3, lineHeight: 1.35 }}>{ts.desc}</div>
             </div>
           ))}
         </div>
@@ -1767,6 +1772,7 @@ function BookEditor({ project, onUpdate, onBack, subView, setSubView, credits, i
   const [aiLoading, setAiLoading] = useState({});
   const [dragId, setDragId] = useState(null);
   const [dragOver, setDragOver] = useState(null);
+  const [illustrationCandidates, setIllustrationCandidates] = useState(null); // { pageId, a: svg|null, b: svg|null }
   const [illustrationError, setIllustrationError] = useState(null); // { pageId, msg }
 
   const selPage = pages.find((p) => p.id === selId);
@@ -1860,63 +1866,77 @@ Return exactly: {"pages":[{"title":"string","content":"string"}]} with 5 entries
     if (!isAdmin && credits <= 0) { onShowPaywall(); return; }
     const key = pageId + 'illustrate';
     setAiLoading((l) => ({ ...l, [key]: true }));
+    setIllustrationCandidates(null);
     setIllustrationError(null);
     try {
       const system =
         'You are an SVG illustrator that creates simple, bold line art for coloring books. ' +
         'Respond ONLY with valid SVG code, no explanation, no markdown, no backticks. ' +
         "The SVG must be exactly 600x600 pixels with viewBox='0 0 600 600'. " +
-        'Use only black strokes (#000000) with stroke-width=\'3\' on a white background. ' +
+        "Use only black strokes (#000000) with stroke-width='3' on a white background. " +
         'No fill colors. No gradients. Simple, recognizable shapes only — toddler-friendly with thick outlines.';
 
-      const userMsg =
+      const basePrompt =
         `Create a coloring page SVG illustration of: ${page.title}. ` +
         `Scene: ${page.content || page.title}. ` +
         'Style: simple bold outlines, suitable for toddlers to color.';
 
-      const withTimeout = (promise, ms) =>
+      const callApi = (userMsg) =>
         Promise.race([
-          promise,
+          fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-api-key': 'placeholder',
+              'anthropic-version': '2023-06-01',
+              'anthropic-dangerous-direct-browser-access': 'true',
+            },
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-5',
+              max_tokens: 4096,
+              system,
+              messages: [{ role: 'user', content: userMsg }],
+            }),
+          }).then(async (r) => {
+            if (!r.ok) {
+              const err = await r.json().catch(() => ({}));
+              throw new Error(err?.error?.message || `API error ${r.status}`);
+            }
+            const data = await r.json();
+            const text = data.content?.[0]?.text || '';
+            const m = text.match(/<svg[\s\S]*?<\/svg>/i);
+            return m ? m[0] : null;
+          }),
           new Promise((_, rej) =>
-            setTimeout(() => rej(new Error('Generation timed out after 30 seconds. Please try again.')), ms)
+            setTimeout(() => rej(new Error('Timed out after 30 s')), 30000)
           ),
         ]);
 
-      const raw = await withTimeout(
-        fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            'x-api-key': 'placeholder',
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
-          },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-5',
-            max_tokens: 4096,
-            system,
-            messages: [{ role: 'user', content: userMsg }],
-          }),
-        }).then(async (r) => {
-          if (!r.ok) {
-            const err = await r.json().catch(() => ({}));
-            throw new Error(err?.error?.message || `API error ${r.status}`);
-          }
-          return r.json();
-        }),
-        30000
-      );
+      const [r1, r2] = await Promise.allSettled([
+        callApi(basePrompt + ' Draw with extra detail and intricate line work.'),
+        callApi(basePrompt + ' Draw with minimal shapes and broad, simple strokes.'),
+      ]);
 
-      const text = raw.content?.[0]?.text || '';
-      const match = text.match(/<svg[\s\S]*?<\/svg>/i);
-      if (!match) throw new Error('No SVG found in response. Please try again.');
+      const svgA = r1.status === 'fulfilled' ? r1.value : null;
+      const svgB = r2.status === 'fulfilled' ? r2.value : null;
 
-      updatePage(pageId, { illustration: match[0] });
+      if (!svgA && !svgB) {
+        const msg = r1.reason?.message || r2.reason?.message || 'Both attempts failed.';
+        throw new Error(msg);
+      }
+
+      setIllustrationCandidates({ pageId, a: svgA, b: svgB });
       onUseCredit();
     } catch (e) {
       setIllustrationError({ pageId, msg: e.message || 'Generation failed. Please retry.' });
     }
     setAiLoading((l) => ({ ...l, [key]: false }));
+  };
+
+  const selectIllustration = (svg) => {
+    if (!illustrationCandidates) return;
+    updatePage(illustrationCandidates.pageId, { illustration: svg });
+    setIllustrationCandidates(null);
   };
 
   const downloadSVG = (page) => {
@@ -2194,24 +2214,27 @@ Return exactly: {"pages":[{"title":"string","content":"string"}]} with 5 entries
               {/* Illustration Panel */}
               <Field label="Page Illustration">
                 {aiLoading[selPage.id + 'illustrate'] ? (
-                  /* Loading skeleton */
+                  /* Loading skeleton — two placeholders for the two parallel calls */
                   <div>
-                    <div
-                      style={{
-                        width: '100%',
-                        maxWidth: 360,
-                        height: 220,
-                        borderRadius: 10,
-                        background: 'linear-gradient(90deg, #F0F0F0 25%, #E8E8E8 50%, #F0F0F0 75%)',
-                        backgroundSize: '200% 100%',
-                        animation: 'shimmer 1.4s infinite',
-                        border: `1px solid ${T.border}`,
-                        marginBottom: 12,
-                      }}
-                    />
+                    <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+                      {[1, 2].map((n) => (
+                        <div
+                          key={n}
+                          style={{
+                            flex: 1,
+                            height: 200,
+                            borderRadius: 10,
+                            background: 'linear-gradient(90deg, #F0F0F0 25%, #E8E8E8 50%, #F0F0F0 75%)',
+                            backgroundSize: '200% 100%',
+                            animation: 'shimmer 1.4s infinite',
+                            border: `1px solid ${T.border}`,
+                          }}
+                        />
+                      ))}
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: T.textMuted, fontSize: 13 }}>
                       <Spinner size={16} />
-                      Generating illustration…
+                      Generating 2 variations…
                     </div>
                   </div>
                 ) : illustrationError?.pageId === selPage.id ? (
@@ -2234,6 +2257,75 @@ Return exactly: {"pages":[{"title":"string","content":"string"}]} with 5 entries
                     >
                       Retry
                     </Btn>
+                  </div>
+                ) : illustrationCandidates?.pageId === selPage.id ? (
+                  /* Pick your favourite */
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 14 }}>
+                      Pick your favourite:
+                    </div>
+                    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                      {[illustrationCandidates.a, illustrationCandidates.b].map((svg, idx) =>
+                        svg ? (
+                          <div key={idx} style={{ flex: '1 1 200px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div
+                              style={{
+                                background: '#fff',
+                                border: `2px solid ${T.border}`,
+                                borderRadius: 10,
+                                overflow: 'hidden',
+                                padding: 6,
+                                cursor: 'pointer',
+                                transition: 'border-color 0.15s',
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.borderColor = T.accent)}
+                              onMouseLeave={(e) => (e.currentTarget.style.borderColor = T.border)}
+                              onClick={() => selectIllustration(svg)}
+                              dangerouslySetInnerHTML={{ __html: svg }}
+                            />
+                            <Btn
+                              variant="primary"
+                              size="sm"
+                              style={{ justifyContent: 'center' }}
+                              onClick={() => selectIllustration(svg)}
+                            >
+                              ✓ Use this one
+                            </Btn>
+                          </div>
+                        ) : (
+                          <div
+                            key={idx}
+                            style={{
+                              flex: '1 1 200px',
+                              minWidth: 0,
+                              height: 200,
+                              borderRadius: 10,
+                              border: `1px dashed ${T.border}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: T.textFaint,
+                              fontSize: 12,
+                            }}
+                          >
+                            Failed
+                          </div>
+                        )
+                      )}
+                    </div>
+                    <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
+                      <Btn
+                        variant="secondary"
+                        size="sm"
+                        loading={!!aiLoading[selPage.id + 'illustrate']}
+                        onClick={() => generateIllustration(selPage.id)}
+                      >
+                        ↺ Regenerate Illustration Illustration
+                      </Btn>
+                      <Btn variant="ghost" size="sm" onClick={() => setIllustrationCandidates(null)}>
+                        Dismiss
+                      </Btn>
+                    </div>
                   </div>
                 ) : selPage.illustration ? (
                   /* Selected illustration viewer */
@@ -2261,7 +2353,7 @@ Return exactly: {"pages":[{"title":"string","content":"string"}]} with 5 entries
                         loading={!!aiLoading[selPage.id + 'illustrate']}
                         onClick={() => generateIllustration(selPage.id)}
                       >
-                        ↺ Regenerate
+                        ↺ Regenerate Illustration
                       </Btn>
                       <Btn variant="secondary" size="xs" onClick={() => downloadSVG(selPage)}>↓ SVG</Btn>
                       <Btn variant="secondary" size="xs" onClick={() => downloadPNG(selPage)}>↓ PNG</Btn>

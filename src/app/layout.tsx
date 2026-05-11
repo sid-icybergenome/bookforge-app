@@ -23,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${jakarta.variable} h-full`} style={{ colorScheme: 'light' }}>
+    <html lang="en" className={`${jakarta.variable} h-full`} style={{ colorScheme: 'light' }} suppressHydrationWarning>
       <body className="h-full" suppressHydrationWarning style={{ fontFamily: "var(--font-jakarta), sans-serif" }}>
         {children}
       </body>
