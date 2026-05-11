@@ -79,6 +79,24 @@ const GRADIENTS = [
   'linear-gradient(135deg,#f77062,#fe5196)',
 ];
 
+const COVER_STYLES = [
+  {
+    id: 'professional',
+    label: 'Professional',
+    prompt: 'Clean professional commercial book cover design, modern bold typography layout, strong visual hierarchy, high-end publishing aesthetic, no text in image',
+  },
+  {
+    id: 'childrens',
+    label: "Children's",
+    prompt: 'Colorful playful whimsical book cover illustration, cute friendly characters, bright happy colors, fun inviting design for children, no text in image',
+  },
+  {
+    id: 'minimalist',
+    label: 'Minimalist',
+    prompt: 'Elegant minimalist book cover, subtle geometric shapes or single focal illustration, clean white space, sophisticated muted palette, no text in image',
+  },
+];
+
 const COLOR_THEMES = [
   { id: 'violet', label: 'Violet Dream', gradient: 'linear-gradient(135deg,#667eea,#764ba2)' },
   { id: 'rose', label: 'Rose Gold', gradient: 'linear-gradient(135deg,#f093fb,#f5576c)' },
@@ -256,6 +274,38 @@ const fmtDate = (iso) =>
 
 const typeInfo = (id) => BOOK_TYPES.find((t) => t.id === id) || BOOK_TYPES[0];
 const colorTheme = (id) => COLOR_THEMES.find((t) => t.id === id) || COLOR_THEMES[0];
+
+function parseTrimSize(trimId) {
+  const [w, h] = (trimId || '6x9').split('x');
+  return [parseFloat(w), parseFloat(h)];
+}
+
+function kdpSpineIn(pages) {
+  return Math.max(0.0625, pages * 0.002252);
+}
+
+async function svgToDataUrl(svgStr, width, height) {
+  return new Promise((resolve) => {
+    try {
+      const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/jpeg', 0.92));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    } catch { resolve(null); }
+  });
+}
 
 // ─── UI Atoms ─────────────────────────────────────────────────────────────────
 
@@ -2450,6 +2500,9 @@ Return exactly: {"pages":[{"title":"string","content":"string"}]} with 5 entries
 function CoverDesigner({ project, onUpdate, subView, setSubView, onBack }) {
   const [cover, setCover] = useState(project.cover || {});
   const [genLoading, setGenLoading] = useState(false);
+  const [coverGenLoading, setCoverGenLoading] = useState(false);
+  const [coverCandidates, setCoverCandidates] = useState(null);
+  const [coverError, setCoverError] = useState('');
 
   const set = (k, v) => {
     const updated = { ...cover, [k]: v };
@@ -2470,44 +2523,66 @@ function CoverDesigner({ project, onUpdate, subView, setSubView, onBack }) {
     setGenLoading(false);
   };
 
+  const generateCoverImage = async () => {
+    setCoverGenLoading(true);
+    setCoverError('');
+    setCoverCandidates(null);
+    const title = cover.title || project.title;
+    const generateOne = async (style) => {
+      const prompt = `${style.prompt}. This is a book cover for "${title}" — a ${typeInfo(project.type).label} about "${project.theme || title}" for ${project.ageGroup || 'adults'} readers. Create a striking, eye-catching Amazon KDP book cover image. Square composition. Do not include any text or lettering in the image.`;
+      const res = await fetch('/api/generate-cover', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `${style.label} generation failed`);
+      }
+      const data = await res.json();
+      return { style: style.id, label: style.label, b64: data.b64 };
+    };
+    const results = await Promise.allSettled(COVER_STYLES.map(generateOne));
+    const successful = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+    if (successful.length === 0) {
+      const first = results.find((r) => r.status === 'rejected');
+      setCoverError(first?.reason?.message || 'Cover generation failed. Check OPENAI_API_KEY in .env.local.');
+    } else {
+      setCoverCandidates(successful);
+    }
+    setCoverGenLoading(false);
+  };
+
+  const selectCoverImage = (b64) => {
+    set('aiImage', b64);
+    setCoverCandidates(null);
+  };
+
   const theme = colorTheme(cover.colorTheme);
   const pageCount = project.pages?.length || 24;
-  const spineW = Math.max(12, Math.round(pageCount * 0.052 * 25.4));
+  const spineIn = kdpSpineIn(pageCount);
+  const [trimW, trimH] = parseTrimSize(project.trimSize);
+  const fullW = trimW * 2 + spineIn + 0.25;
+  const fullH = trimH + 0.25;
+  const previewScale = 460 / (fullW * 96);
+  const previewFrontW = Math.round(trimW * 96 * previewScale);
+  const previewSpineW = Math.max(8, Math.round(spineIn * 96 * previewScale));
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div
-        style={{
-          padding: '13px 22px',
-          borderBottom: `1px solid ${T.border}`,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          flexShrink: 0,
-        }}
-      >
-        <button
-          onClick={onBack}
-          style={{ background: 'none', border: 'none', color: T.textMuted, cursor: 'pointer', fontSize: 18 }}
-        >
-          ←
-        </button>
+      <div style={{ padding: '13px 22px', borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: T.textMuted, cursor: 'pointer', fontSize: 18 }}>←</button>
         <div style={{ fontSize: 15, fontWeight: 700, color: T.text, flex: 1 }}>Cover Designer</div>
+        <div style={{ fontSize: 11, color: T.textFaint }}>
+          Wraparound: {fullW.toFixed(3)}″ × {fullH.toFixed(3)}″ · Spine: {spineIn.toFixed(3)}″
+        </div>
       </div>
 
       <EditorTabBar view={subView} setView={setSubView} />
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Controls */}
-        <div
-          style={{
-            width: 300,
-            flexShrink: 0,
-            borderRight: `1px solid ${T.border}`,
-            overflow: 'auto',
-            padding: '22px 20px',
-          }}
-        >
+        {/* Controls panel */}
+        <div style={{ width: 300, flexShrink: 0, borderRight: `1px solid ${T.border}`, overflow: 'auto', padding: '22px 20px' }}>
           <Field label="Title">
             <Input value={cover.title || ''} onChange={(e) => set('title', e.target.value)} placeholder="Cover title" />
           </Field>
@@ -2521,38 +2596,74 @@ function CoverDesigner({ project, onUpdate, subView, setSubView, onBack }) {
             <Input value={cover.tagline || ''} onChange={(e) => set('tagline', e.target.value)} placeholder="Short tagline" />
           </Field>
 
-          <Field label="Color Theme">
+          {/* AI Cover Generation */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              AI Cover Image
+            </div>
+            {cover.aiImage && (
+              <div style={{ position: 'relative', marginBottom: 8 }}>
+                <img
+                  src={`data:image/png;base64,${cover.aiImage}`}
+                  alt="AI cover"
+                  style={{ width: '100%', borderRadius: 8, border: `1px solid ${T.border}` }}
+                />
+                <button
+                  onClick={() => set('aiImage', null)}
+                  style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff', borderRadius: 4, cursor: 'pointer', fontSize: 11, padding: '2px 7px' }}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            {coverError && (
+              <div style={{ fontSize: 11, color: T.error, background: T.errorBg, padding: '8px 10px', borderRadius: 6, marginBottom: 8, lineHeight: 1.5 }}>
+                {coverError}
+              </div>
+            )}
+            {coverGenLoading ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0' }}>
+                <Spinner size={14} />
+                <span style={{ fontSize: 12, color: T.textMuted }}>Generating 3 styles…</span>
+              </div>
+            ) : (
+              <Btn variant="secondary" size="sm" onClick={generateCoverImage} style={{ width: '100%' }}>
+                ✦ Generate AI Cover (3 styles)
+              </Btn>
+            )}
+          </div>
+
+          <Field label="Color Theme (fallback)">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
               {COLOR_THEMES.map((ct) => (
                 <button
                   key={ct.id}
                   onClick={() => set('colorTheme', ct.id)}
                   title={ct.label}
-                  style={{
-                    height: 44,
-                    borderRadius: 8,
-                    border: `3px solid ${cover.colorTheme === ct.id ? '#fff' : 'transparent'}`,
-                    background: ct.gradient,
-                    cursor: 'pointer',
-                    boxShadow: cover.colorTheme === ct.id ? '0 0 0 1px ' + T.accent : 'none',
-                    transition: 'all 0.12s',
-                  }}
+                  style={{ height: 44, borderRadius: 8, border: `3px solid ${cover.colorTheme === ct.id ? '#fff' : 'transparent'}`, background: ct.gradient, cursor: 'pointer', boxShadow: cover.colorTheme === ct.id ? '0 0 0 1px ' + T.accent : 'none', transition: 'all 0.12s' }}
                 />
               ))}
             </div>
           </Field>
 
-          <Field label="Layout">
+          <Field label="Text Layout">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {LAYOUTS.map((l) => (
-                <ToggleChip
-                  key={l.id}
-                  active={cover.layout === l.id}
-                  onClick={() => set('layout', l.id)}
-                  style={{ justifyContent: 'center' }}
-                >
+                <ToggleChip key={l.id} active={cover.layout === l.id} onClick={() => set('layout', l.id)} style={{ justifyContent: 'center' }}>
                   {l.label}
                 </ToggleChip>
+              ))}
+            </div>
+          </Field>
+
+          <Field label="Text Color">
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {['#ffffff', '#000000', '#FFE066', '#FF9900', '#1a1a2e'].map((color) => (
+                <button
+                  key={color}
+                  onClick={() => set('textColor', color)}
+                  style={{ width: 30, height: 30, borderRadius: '50%', background: color, border: `3px solid ${cover.textColor === color ? T.accent : T.border}`, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}
+                />
               ))}
             </div>
           </Field>
@@ -2571,64 +2682,60 @@ function CoverDesigner({ project, onUpdate, subView, setSubView, onBack }) {
           </Field>
         </div>
 
-        {/* Preview */}
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: '#090b14',
-            overflow: 'auto',
-            padding: 40,
-            gap: 12,
-          }}
-        >
-          <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 4 }}>
-            KDP Cover Preview — {project.trimSize}
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              boxShadow: '0 24px 80px rgba(0,0,0,0.7)',
-              borderRadius: 6,
-              overflow: 'hidden',
-            }}
-          >
-            {/* Back */}
-            <CoverBack cover={cover} theme={theme} width={180} />
-            {/* Spine */}
-            <div
-              style={{
-                width: spineW,
-                background: theme.gradient,
-                filter: 'brightness(0.65)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <div
-                style={{
-                  writingMode: 'vertical-rl',
-                  fontSize: 9,
-                  color: 'rgba(255,255,255,0.85)',
-                  fontWeight: 700,
-                  letterSpacing: 1,
-                  overflow: 'hidden',
-                  maxHeight: 220,
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {cover.title || project.title}
+        {/* Preview area */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#090b14', overflow: 'auto' }}>
+          {/* Candidate picker */}
+          {coverCandidates && (
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid #1e2030', background: '#0f1120', flexShrink: 0 }}>
+              <div style={{ fontSize: 12, color: '#aaa', marginBottom: 12, textAlign: 'center' }}>
+                Pick a cover style — click to use it:
+              </div>
+              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
+                {coverCandidates.map((c) => (
+                  <div key={c.style} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                    <img
+                      src={`data:image/png;base64,${c.b64}`}
+                      alt={c.label}
+                      style={{ width: 130, height: 130, objectFit: 'cover', borderRadius: 8, border: '2px solid #2a2d3e', cursor: 'pointer', transition: 'border-color 0.15s' }}
+                      onMouseOver={(e) => { e.currentTarget.style.borderColor = T.accent; }}
+                      onMouseOut={(e) => { e.currentTarget.style.borderColor = '#2a2d3e'; }}
+                      onClick={() => selectCoverImage(c.b64)}
+                    />
+                    <button
+                      onClick={() => selectCoverImage(c.b64)}
+                      style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 6, padding: '5px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      ✓ {c.label}
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => setCoverCandidates(null)}
+                  style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 22, padding: 4 }}
+                >
+                  ×
+                </button>
               </div>
             </div>
-            {/* Front */}
-            <CoverFront cover={cover} project={project} theme={theme} width={180} />
-          </div>
-          <div style={{ fontSize: 11, color: T.textFaint }}>
-            Spine approx. {spineW}px based on {pageCount} pages
+          )}
+
+          {/* 3-panel KDP wrap preview */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, gap: 12 }}>
+            <div style={{ fontSize: 11, color: '#555', marginBottom: 4 }}>
+              KDP Wraparound Preview · {project.trimSize} · {pageCount} pages
+            </div>
+            <div style={{ display: 'flex', boxShadow: '0 24px 80px rgba(0,0,0,0.7)', borderRadius: 6, overflow: 'hidden' }}>
+              <CoverBack cover={cover} theme={theme} width={previewFrontW} />
+              <div style={{ width: previewSpineW, background: theme.gradient, filter: 'brightness(0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                <div style={{ writingMode: 'vertical-rl', fontSize: 9, color: 'rgba(255,255,255,0.85)', fontWeight: 700, letterSpacing: 1, overflow: 'hidden', textOverflow: 'ellipsis', maxHeight: '80%' }}>
+                  {cover.title || project.title}
+                </div>
+              </div>
+              <CoverFront cover={cover} project={project} theme={theme} width={previewFrontW} />
+            </div>
+            <div style={{ fontSize: 10, color: '#444' }}>
+              Bleed guides omitted · Export PDF includes proper 0.125″ bleed on all sides
+            </div>
           </div>
         </div>
       </div>
@@ -2640,72 +2747,51 @@ function CoverFront({ cover, project, theme, width = 280 }) {
   const layout = cover.layout || 'centered';
   const centered = layout === 'centered' || layout === 'minimal';
   const info = typeInfo(project.type);
+  const textColor = cover.textColor || '#ffffff';
+  const height = Math.round(width * (11 / 8.5));
+  const hasAi = !!cover.aiImage;
+
+  const textJustify = centered ? 'center' : layout === 'top' ? 'flex-start' : 'flex-end';
+  const textAlign = centered ? 'center' : 'left';
+
+  const scrimGradient = hasAi
+    ? layout === 'top'
+      ? 'linear-gradient(rgba(0,0,0,0.55) 0%, transparent 55%)'
+      : 'linear-gradient(transparent 35%, rgba(0,0,0,0.72) 100%)'
+    : layout === 'bold'
+    ? 'rgba(0,0,0,0.38)'
+    : 'none';
 
   return (
-    <div
-      style={{
-        width,
-        minHeight: width * (11 / 8.5),
-        background: theme.gradient,
-        padding: 22,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: centered ? 'center' : 'flex-end',
-        alignItems: centered ? 'center' : 'flex-start',
-        textAlign: centered ? 'center' : 'left',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    >
-      {layout === 'bold' && (
-        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.38)' }} />
-      )}
-      {layout === 'offset' && (
-        <div
-          style={{
-            position: 'absolute',
-            right: -20,
-            top: -20,
-            width: '70%',
-            height: '70%',
-            background: 'rgba(255,255,255,0.1)',
-            borderRadius: '50%',
-          }}
+    <div style={{ width, height, position: 'relative', overflow: 'hidden', background: theme.gradient, display: 'flex', flexDirection: 'column', justifyContent: textJustify, alignItems: centered ? 'center' : 'flex-start', textAlign }}>
+      {hasAi && (
+        <img
+          src={`data:image/png;base64,${cover.aiImage}`}
+          alt="cover"
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
         />
       )}
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        <div style={{ fontSize: layout === 'bold' ? 32 : 26, marginBottom: 10 }}>{info.icon}</div>
-        <div
-          style={{
-            fontSize: layout === 'bold' ? 15 : 13,
-            fontWeight: 800,
-            color: '#fff',
-            textShadow: '0 2px 10px rgba(0,0,0,0.4)',
-            marginBottom: 5,
-            lineHeight: 1.25,
-          }}
-        >
+      {!hasAi && layout === 'offset' && (
+        <div style={{ position: 'absolute', right: -20, top: -20, width: '70%', height: '70%', background: 'rgba(255,255,255,0.1)', borderRadius: '50%' }} />
+      )}
+      <div style={{ position: 'absolute', inset: 0, background: scrimGradient }} />
+      <div style={{ position: 'relative', zIndex: 1, padding: Math.round(width * 0.075) }}>
+        {!hasAi && <div style={{ fontSize: Math.round(width * (layout === 'bold' ? 0.12 : 0.09)), marginBottom: 8 }}>{info.icon}</div>}
+        <div style={{ fontSize: Math.round(width * (layout === 'bold' ? 0.058 : 0.048)), fontWeight: 800, color: textColor, textShadow: '0 2px 12px rgba(0,0,0,0.6)', marginBottom: 4, lineHeight: 1.2 }}>
           {cover.title || project.title}
         </div>
         {(cover.subtitle || project.subtitle) && (
-          <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.82)', marginBottom: 8, lineHeight: 1.4 }}>
+          <div style={{ fontSize: Math.round(width * 0.034), color: textColor, opacity: 0.88, marginBottom: 6, lineHeight: 1.4 }}>
             {cover.subtitle || project.subtitle}
           </div>
         )}
         {cover.tagline && (
-          <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.7)', fontStyle: 'italic', marginBottom: 12 }}>
+          <div style={{ fontSize: Math.round(width * 0.03), color: textColor, opacity: 0.75, fontStyle: 'italic', marginBottom: 10 }}>
             {cover.tagline}
           </div>
         )}
         {cover.author && (
-          <div
-            style={{
-              fontSize: 9,
-              color: 'rgba(255,255,255,0.9)',
-              marginTop: 14,
-              fontWeight: 600,
-            }}
-          >
+          <div style={{ fontSize: Math.round(width * 0.033), color: textColor, opacity: 0.9, marginTop: 10, fontWeight: 600 }}>
             {cover.author}
           </div>
         )}
@@ -2715,25 +2801,14 @@ function CoverFront({ cover, project, theme, width = 280 }) {
 }
 
 function CoverBack({ cover, theme, width = 180 }) {
+  const height = Math.round(width * (11 / 8.5));
+  const fs = Math.max(7, Math.round(width * 0.048));
   return (
-    <div
-      style={{
-        width,
-        minHeight: width * (11 / 8.5),
-        background: theme.gradient,
-        filter: 'brightness(0.78)',
-        padding: 16,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-      }}
-    >
-      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.82)', lineHeight: 1.7 }}>
-        {cover.backBlurb || (
-          <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Back cover blurb appears here.</span>
-        )}
+    <div style={{ width, height, background: theme.gradient, filter: 'brightness(0.78)', padding: Math.round(width * 0.085), display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' }}>
+      <div style={{ fontSize: fs, color: 'rgba(255,255,255,0.88)', lineHeight: 1.65, flex: 1, overflow: 'hidden' }}>
+        {cover.backBlurb || <span style={{ opacity: 0.45, fontStyle: 'italic' }}>Back cover blurb appears here.</span>}
       </div>
-      <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.4)' }}>ISBN</div>
+      <div style={{ fontSize: Math.max(6, fs - 2), color: 'rgba(255,255,255,0.35)', marginTop: 8 }}>ISBN</div>
     </div>
   );
 }
@@ -2743,30 +2818,31 @@ function CoverBack({ cover, theme, width = 180 }) {
 function BookPreview({ project, subView, setSubView, onBack }) {
   const pages = [...(project.pages || [])].sort((a, b) => a.order - b.order);
   const [idx, setIdx] = useState(-1);
+  const thumbRef = useRef(null);
 
   const isFront = idx === -1;
   const isBack = idx === pages.length;
   const curPage = !isFront && !isBack ? pages[idx] : null;
   const theme = colorTheme(project.cover?.colorTheme);
 
+  useEffect(() => {
+    if (!thumbRef.current) return;
+    const el = thumbRef.current.querySelector(`[data-thumb="${idx}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [idx]);
+
+  const thumbBox = (active) => ({
+    flexShrink: 0, cursor: 'pointer',
+    border: `2px solid ${active ? T.accent : 'transparent'}`,
+    borderRadius: 4, overflow: 'hidden',
+    opacity: active ? 1 : 0.55,
+    transition: 'all 0.15s',
+  });
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div
-        style={{
-          padding: '13px 22px',
-          borderBottom: `1px solid ${T.border}`,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          flexShrink: 0,
-        }}
-      >
-        <button
-          onClick={onBack}
-          style={{ background: 'none', border: 'none', color: T.textMuted, cursor: 'pointer', fontSize: 18 }}
-        >
-          ←
-        </button>
+      <div style={{ padding: '13px 22px', borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: T.textMuted, cursor: 'pointer', fontSize: 18 }}>←</button>
         <div style={{ flex: 1, fontSize: 15, fontWeight: 700, color: T.text }}>Book Preview</div>
         <div style={{ fontSize: 12, color: T.textMuted }}>
           {isFront ? 'Front Cover' : isBack ? 'Back Cover' : `Page ${idx + 1} of ${pages.length}`}
@@ -2775,80 +2851,68 @@ function BookPreview({ project, subView, setSubView, onBack }) {
 
       <EditorTabBar view={subView} setView={setSubView} />
 
-      <div
-        style={{
-          flex: 1,
-          background: '#07090f',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 40,
-          overflow: 'auto',
-        }}
-      >
+      {/* Main viewer */}
+      <div style={{ flex: 1, background: '#07090f', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40, overflow: 'auto' }}>
         {isFront ? (
-          <div style={{ boxShadow: '0 24px 80px rgba(0,0,0,0.7)', borderRadius: 6, overflow: 'hidden' }}>
+          <div style={{ boxShadow: '0 24px 80px rgba(0,0,0,0.7)', borderRadius: 6, overflow: 'hidden', animation: 'fadeIn 0.2s ease' }}>
             <CoverFront cover={project.cover || {}} project={project} theme={theme} width={300} />
           </div>
         ) : isBack ? (
-          <div style={{ boxShadow: '0 24px 80px rgba(0,0,0,0.7)', borderRadius: 6, overflow: 'hidden' }}>
+          <div style={{ boxShadow: '0 24px 80px rgba(0,0,0,0.7)', borderRadius: 6, overflow: 'hidden', animation: 'fadeIn 0.2s ease' }}>
             <CoverBack cover={project.cover || {}} theme={theme} width={300} />
           </div>
         ) : (
-          <div
-            style={{
-              width: 300,
-              background: '#fff',
-              borderRadius: 4,
-              padding: '36px 40px',
-              boxShadow: '0 24px 80px rgba(0,0,0,0.7)',
-              minHeight: 380,
-              display: 'flex',
-              flexDirection: 'column',
-              animation: 'fadeIn 0.2s ease',
-            }}
-          >
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 800,
-                color: '#111',
-                textAlign: 'center',
-                marginBottom: 14,
-                lineHeight: 1.4,
-              }}
-            >
-              {curPage?.title}
-            </div>
-            <div style={{ fontSize: 10, color: '#444', lineHeight: 1.9, flex: 1 }}>
-              {curPage?.content || <span style={{ color: '#bbb', fontStyle: 'italic' }}>No content</span>}
-            </div>
-            <div style={{ textAlign: 'center', fontSize: 9, color: '#ccc', marginTop: 16 }}>
-              {idx + 1}
+          <div style={{ width: 300, background: '#fff', borderRadius: 4, boxShadow: '0 24px 80px rgba(0,0,0,0.7)', overflow: 'hidden', animation: 'fadeIn 0.2s ease', display: 'flex', flexDirection: 'column' }}>
+            {curPage?.illustration ? (
+              <div
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 8, background: '#fff', minHeight: 360 }}
+                dangerouslySetInnerHTML={{ __html: curPage.illustration }}
+              />
+            ) : (
+              <div style={{ flex: 1, minHeight: 360, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 28 }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>🎨</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#222', marginBottom: 6, textAlign: 'center' }}>{curPage?.title}</div>
+                <div style={{ fontSize: 10, color: '#aaa', fontStyle: 'italic' }}>No illustration yet — generate one in the editor</div>
+              </div>
+            )}
+            <div style={{ padding: '7px 12px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'center' }}>
+              <span style={{ fontSize: 9, color: '#ccc' }}>{idx + 1}</span>
             </div>
           </div>
         )}
       </div>
 
-      <div
-        style={{
-          padding: '14px 24px',
-          borderTop: `1px solid ${T.border}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 24,
-        }}
-      >
-        <Btn variant="secondary" onClick={() => setIdx((i) => i - 1)} disabled={isFront}>
-          ← Prev
-        </Btn>
+      {/* Nav bar */}
+      <div style={{ padding: '10px 24px', borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, flexShrink: 0 }}>
+        <Btn variant="secondary" onClick={() => setIdx((i) => i - 1)} disabled={isFront}>← Prev</Btn>
         <div style={{ fontSize: 13, color: T.textMuted, minWidth: 120, textAlign: 'center' }}>
           {isFront ? 'Front Cover' : isBack ? 'Back Cover' : `${idx + 1} / ${pages.length}`}
         </div>
-        <Btn variant="secondary" onClick={() => setIdx((i) => i + 1)} disabled={isBack}>
-          Next →
-        </Btn>
+        <Btn variant="secondary" onClick={() => setIdx((i) => i + 1)} disabled={isBack}>Next →</Btn>
+      </div>
+
+      {/* Thumbnail strip */}
+      <div ref={thumbRef} style={{ display: 'flex', overflowX: 'auto', gap: 8, padding: '10px 14px', borderTop: `1px solid ${T.border}`, background: T.surface2, flexShrink: 0, scrollbarWidth: 'thin' }}>
+        <div data-thumb={-1} style={thumbBox(idx === -1)} onClick={() => setIdx(-1)}>
+          <CoverFront cover={project.cover || {}} project={project} theme={theme} width={40} />
+        </div>
+        {pages.map((p, i) => (
+          <div key={p.id} data-thumb={i} style={thumbBox(idx === i)} onClick={() => setIdx(i)}>
+            {p.illustration ? (
+              <div
+                style={{ width: 40, height: 52, background: '#fff', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 0 }}
+                dangerouslySetInnerHTML={{ __html: p.illustration.replace(/(<svg[^>]*)\s+width="[^"]*"/, '$1 width="40"').replace(/(<svg[^>]*)\s+height="[^"]*"/, '$1 height="52"') }}
+              />
+            ) : (
+              <div style={{ width: 40, height: 52, background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4 }}>
+                <span style={{ fontSize: 7, color: '#bbb', textAlign: 'center', lineHeight: 1.3 }}>{p.title?.slice(0, 12)}</span>
+              </div>
+            )}
+          </div>
+        ))}
+        <div data-thumb={pages.length} style={thumbBox(idx === pages.length)} onClick={() => setIdx(pages.length)}>
+          <CoverBack cover={project.cover || {}} theme={theme} width={40} />
+        </div>
       </div>
     </div>
   );
@@ -2863,6 +2927,134 @@ function ExportSettings({ project, onUpdate, subView, setSubView, onBack }) {
   );
   const [loading, setLoading] = useState({});
   const [copied, setCopied] = useState('');
+
+  const downloadInteriorPdf = async () => {
+    setLoading((l) => ({ ...l, pdf: true }));
+    try {
+      const { jsPDF } = await import('jspdf');
+      const [tw, th] = parseTrimSize(project.trimSize);
+      const margin = 0.5;
+      const doc = new jsPDF({ unit: 'in', format: [tw, th] });
+      const sortedPages = [...(project.pages || [])].sort((a, b) => a.order - b.order);
+
+      for (let i = 0; i < sortedPages.length; i++) {
+        if (i > 0) doc.addPage([tw, th]);
+        const page = sortedPages[i];
+        doc.setFillColor(255, 255, 255);
+        doc.rect(0, 0, tw, th, 'F');
+
+        if (page.illustration) {
+          const px = Math.round(tw * 150);
+          const py = Math.round(th * 150);
+          const jpegData = await svgToDataUrl(page.illustration, px, py);
+          if (jpegData) {
+            const imgW = tw - margin * 2;
+            const imgH = th - margin * 2 - 0.25;
+            doc.addImage(jpegData, 'JPEG', margin, margin, imgW, imgH);
+          }
+        } else {
+          doc.setFontSize(14);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(30, 30, 30);
+          doc.text(page.title || '', tw / 2, margin + 0.45, { align: 'center' });
+          if (page.content) {
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(60, 60, 60);
+            const lines = doc.splitTextToSize(page.content, tw - margin * 2);
+            doc.text(lines, margin, margin + 0.85);
+          }
+        }
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(180, 180, 180);
+        doc.text(String(i + 1), tw / 2, th - 0.22, { align: 'center' });
+      }
+
+      doc.save(`${project.title || 'book'}-interior.pdf`);
+    } catch (err) {
+      alert('PDF generation failed: ' + (err instanceof Error ? err.message : String(err)));
+    }
+    setLoading((l) => ({ ...l, pdf: false }));
+  };
+
+  const downloadCoverPdf = async () => {
+    setLoading((l) => ({ ...l, coverpdf: true }));
+    try {
+      const { jsPDF } = await import('jspdf');
+      const cover = project.cover || {};
+      const [tw, th] = parseTrimSize(project.trimSize);
+      const pageCount = project.pages?.length || 24;
+      const spineIn = kdpSpineIn(pageCount);
+      const bleed = 0.125;
+      const totalW = tw * 2 + spineIn + bleed * 2;
+      const totalH = th + bleed * 2;
+
+      const doc = new jsPDF({ unit: 'in', format: [totalW, totalH], orientation: 'landscape' });
+
+      // Background: approximate gradient with solid fill from first color
+      const themeObj = colorTheme(cover.colorTheme);
+      const hex = (themeObj.gradient.match(/#([0-9a-fA-F]{6})/g) || ['#667eea'])[0].slice(1);
+      doc.setFillColor(parseInt(hex.slice(0,2),16), parseInt(hex.slice(2,4),16), parseInt(hex.slice(4,6),16));
+      doc.rect(0, 0, totalW, totalH, 'F');
+
+      // AI cover image on front panel
+      if (cover.aiImage) {
+        const fx = bleed + tw + spineIn;
+        doc.addImage(`data:image/png;base64,${cover.aiImage}`, 'PNG', fx, bleed, tw, th);
+      }
+
+      // Front text
+      const textColor = cover.textColor || '#ffffff';
+      const tc = textColor.slice(1);
+      doc.setTextColor(parseInt(tc.slice(0,2),16), parseInt(tc.slice(2,4),16), parseInt(tc.slice(4,6),16));
+      const ftx = bleed + tw + spineIn + tw / 2;
+      doc.setFontSize(Math.max(14, tw * 8));
+      doc.setFont('helvetica', 'bold');
+      doc.text(cover.title || project.title || '', ftx, bleed + th * 0.62, { align: 'center', maxWidth: tw - 0.4 });
+      if (cover.author) {
+        doc.setFontSize(Math.max(9, tw * 5));
+        doc.setFont('helvetica', 'normal');
+        doc.text(cover.author, ftx, bleed + th * 0.8, { align: 'center', maxWidth: tw - 0.4 });
+      }
+
+      // Spine text (rotated)
+      if (spineIn >= 0.2) {
+        doc.setFontSize(Math.max(7, spineIn * 28));
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        const sx = bleed + tw + spineIn / 2;
+        doc.text(cover.title || project.title || '', sx, bleed + th / 2, { angle: 90, align: 'center' });
+      }
+
+      // Back blurb
+      if (cover.backBlurb) {
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(240, 240, 240);
+        const lines = doc.splitTextToSize(cover.backBlurb, tw - 0.5);
+        doc.text(lines, bleed + 0.25, bleed + 0.4);
+      }
+
+      // Crop/bleed guide lines
+      doc.setDrawColor(220, 40, 40);
+      doc.setLineWidth(0.004);
+      doc.line(bleed, 0, bleed, totalH);
+      doc.line(totalW - bleed, 0, totalW - bleed, totalH);
+      doc.line(0, bleed, totalW, bleed);
+      doc.line(0, totalH - bleed, totalW, totalH - bleed);
+      doc.setDrawColor(120, 120, 120);
+      doc.setLineWidth(0.003);
+      doc.line(bleed + tw, 0, bleed + tw, totalH);
+      doc.line(bleed + tw + spineIn, 0, bleed + tw + spineIn, totalH);
+
+      doc.save(`${project.title || 'book'}-cover.pdf`);
+    } catch (err) {
+      alert('Cover PDF failed: ' + (err instanceof Error ? err.message : String(err)));
+    }
+    setLoading((l) => ({ ...l, coverpdf: false }));
+  };
 
   const setM = (k, v) => {
     const updated = { ...meta, [k]: v };
@@ -2957,15 +3149,28 @@ function ExportSettings({ project, onUpdate, subView, setSubView, onBack }) {
           <div>
             <SectionTitle>KDP Metadata</SectionTitle>
 
-            <Field label="Title">
-              <Input value={meta.title || project.title || ''} onChange={(e) => setM('title', e.target.value)} />
-            </Field>
-            <Field label="Subtitle">
-              <Input value={meta.subtitle || project.subtitle || ''} onChange={(e) => setM('subtitle', e.target.value)} />
-            </Field>
-            <Field label="Author">
-              <Input value={meta.author || project.cover?.author || ''} onChange={(e) => setM('author', e.target.value)} />
-            </Field>
+            {[
+              { label: 'Title', key: 'title', fallback: project.title || '' },
+              { label: 'Subtitle', key: 'subtitle', fallback: project.subtitle || '' },
+              { label: 'Author', key: 'author', fallback: project.cover?.author || '' },
+            ].map(({ label, key, fallback }) => {
+              const val = meta[key] || fallback;
+              return (
+                <Field key={key} label={label}>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Input value={val} onChange={(e) => setM(key, e.target.value)} style={{ flex: 1 }} />
+                    {val && (
+                      <button
+                        onClick={() => copyToClipboard(val, key)}
+                        style={{ flexShrink: 0, background: T.surface3, border: `1px solid ${T.border}`, borderRadius: 6, color: copied === key ? T.success : T.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 10px', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                      >
+                        {copied === key ? '✓' : 'Copy'}
+                      </button>
+                    )}
+                  </div>
+                </Field>
+              );
+            })}
 
             <Field label="Book Description">
               <div style={{ position: 'relative' }}>
@@ -3111,34 +3316,61 @@ function ExportSettings({ project, onUpdate, subView, setSubView, onBack }) {
               </div>
             </Card>
 
-            <SectionTitle>Export</SectionTitle>
-            <Card style={{ padding: 16 }}>
-              <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 14, lineHeight: 1.6 }}>
-                BookForge generates AI content and structure. Use your page content in a layout tool (Canva, Adobe InDesign, Google Docs) to create the final print-ready PDF.
+            <SectionTitle>Download PDFs</SectionTitle>
+            <Card style={{ padding: 16, marginBottom: 24 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <Btn onClick={downloadInteriorPdf} loading={loading.pdf} style={{ width: '100%', justifyContent: 'center' }}>
+                  📥 Download Interior PDF
+                </Btn>
+                <div style={{ fontSize: 11, color: T.textMuted, lineHeight: 1.5, marginTop: -4 }}>
+                  {pageCount} pages · {project.trimSize} trim · SVG illustrations embedded
+                </div>
+                <Btn onClick={downloadCoverPdf} loading={loading.coverpdf} style={{ width: '100%', justifyContent: 'center' }}>
+                  📥 Download KDP Cover PDF
+                </Btn>
+                <div style={{ fontSize: 11, color: T.textMuted, lineHeight: 1.5, marginTop: -4 }}>
+                  Full wraparound · back + spine + front · 0.125″ bleed included · crop guides
+                </div>
               </div>
-              <Btn
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const content = [
-                    project.title,
-                    project.subtitle && `Subtitle: ${project.subtitle}`,
-                    `Type: ${typeInfo(project.type).label}`,
-                    `Pages: ${pageCount}`,
-                    `Trim: ${project.trimSize}`,
-                    '',
-                    '--- PAGES ---',
-                    ...(project.pages || [])
-                      .sort((a, b) => a.order - b.order)
-                      .map((p, i) => `\nPage ${i + 1}: ${p.title}\n${p.content}`),
-                  ]
-                    .filter(Boolean)
-                    .join('\n');
-                  copyToClipboard(content, 'export');
-                }}
-              >
-                {copied === 'export' ? '✓ Copied!' : '📋 Copy All Content'}
-              </Btn>
+            </Card>
+
+            <SectionTitle>KDP Upload Instructions</SectionTitle>
+            <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
+              {[
+                { step: 1, label: 'Go to kdp.amazon.com → Create → Paperback' },
+                { step: 2, label: `Set trim size to ${project.trimSize} inches` },
+                { step: 3, label: `Upload interior PDF (${pageCount} pages, no bleed)` },
+                { step: 4, label: 'Upload cover wraparound PDF (includes bleed)' },
+                { step: 5, label: `Price at minimum $${minPrice} — recommended $${recPrice}` },
+              ].map(({ step, label }) => (
+                <div key={step} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '11px 16px', borderBottom: `1px solid ${T.border}` }}>
+                  <div style={{ flexShrink: 0, width: 22, height: 22, borderRadius: '50%', background: T.accentBg, color: T.accent, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{step}</div>
+                  <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, paddingTop: 2 }}>{label}</div>
+                </div>
+              ))}
+              <div style={{ padding: '10px 16px' }}>
+                <Btn
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const content = [
+                      project.title,
+                      project.subtitle && `Subtitle: ${project.subtitle}`,
+                      `Type: ${typeInfo(project.type).label}`,
+                      `Trim: ${project.trimSize}`,
+                      `Pages: ${pageCount}`,
+                      '',
+                      '--- PAGES ---',
+                      ...(project.pages || [])
+                        .sort((a, b) => a.order - b.order)
+                        .map((p, i) => `\nPage ${i + 1}: ${p.title}\n${p.content}`),
+                    ].filter(Boolean).join('\n');
+                    copyToClipboard(content, 'export');
+                  }}
+                >
+                  {copied === 'export' ? '✓ Copied!' : '📋 Copy All Page Content'}
+                </Btn>
+              </div>
             </Card>
           </div>
         </div>
