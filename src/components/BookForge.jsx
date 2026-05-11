@@ -723,18 +723,36 @@ function Dashboard({ projects, onOpen, onNew, onDelete, onDuplicate }) {
 
   if (!projects.length) {
     return (
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', background: T.bg }}>
         <DashHeader title="My Books" />
+        {/* Welcome banner */}
+        <div style={{
+          margin: '28px 36px 0',
+          padding: '28px 32px',
+          background: 'linear-gradient(135deg, #FFF8EC, #FFEDBA)',
+          border: `1px solid ${T.accent}40`,
+          borderRadius: 16,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24,
+          flexWrap: 'wrap',
+        }}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: T.text, marginBottom: 8 }}>
+              Create your first KDP-ready book in minutes 🚀
+            </div>
+            <div style={{ fontSize: 14, color: T.textMuted, maxWidth: 480, lineHeight: 1.6 }}>
+              BookForge uses AI to generate your entire book outline, page content, and illustrations.
+              Perfect for coloring books and journals — no design skills needed.
+            </div>
+          </div>
+          <Btn onClick={onNew} size="lg">
+            ✦ Create Your First Book
+          </Btn>
+        </div>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <EmptyState
             icon="📚"
             title="Your studio is empty"
-            desc="Create your first AI-powered book in minutes. Pick a type, set your theme, and let the AI do the heavy lifting."
-            cta={
-              <Btn onClick={onNew} size="lg">
-                ✦ Create Your First Book
-              </Btn>
-            }
+            desc="Create your first AI-powered book. Pick a type, set your theme, and let the AI do the heavy lifting."
           />
         </div>
       </main>
@@ -764,7 +782,7 @@ function Dashboard({ projects, onOpen, onNew, onDelete, onDuplicate }) {
           style={{ maxWidth: 240 }}
         />
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {[{ id: 'all', label: 'All' }, ...BOOK_TYPES.map((t) => ({ id: t.id, label: t.icon + ' ' + t.label.split(' ')[0] }))].map(
+          {[{ id: 'all', label: 'All' }, ...BOOK_TYPES.filter(t => t.featured).map((t) => ({ id: t.id, label: t.icon + ' ' + t.label.split(' ')[0] }))].map(
             (f) => (
               <button
                 key={f.id}
@@ -789,14 +807,14 @@ function Dashboard({ projects, onOpen, onNew, onDelete, onDuplicate }) {
         </div>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto', padding: '24px 36px' }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: '32px 40px' }}>
         {visible.length === 0 ? (
           <EmptyState icon="🔍" title="Nothing found" desc="Try a different search or filter." />
         ) : (
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))',
+              gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))',
               gap: 18,
             }}
           >
@@ -820,7 +838,7 @@ function DashHeader({ title, children }) {
   return (
     <div
       style={{
-        padding: '28px 36px 20px',
+        padding: '32px 40px 24px',
         borderBottom: `1px solid ${T.border}`,
         display: 'flex',
         alignItems: 'center',
@@ -843,7 +861,7 @@ function ProjectCard({ project, onOpen, onDelete, onDuplicate }) {
       <div
         onClick={onOpen}
         style={{
-          height: 155,
+          height: 180,
           background: coverGradient(project.id),
           display: 'flex',
           alignItems: 'center',
@@ -1840,41 +1858,66 @@ Return exactly: {"pages":[{"title":"string","content":"string"}]} with 5 entries
   const generateIllustration = async (pageId) => {
     const page = pages.find((p) => p.id === pageId);
     if (!page) return;
-    if (!isAdmin && credits <= 0) {
-      onShowPaywall();
-      return;
-    }
+    if (!isAdmin && credits <= 0) { onShowPaywall(); return; }
     const key = pageId + 'illustrate';
     setAiLoading((l) => ({ ...l, [key]: true }));
+    setIllustrationCandidates(null);
+    setIllustrationError(null);
     try {
       const isColoring = project.type === 'coloring';
       const system = isColoring
-        ? 'You are an SVG illustrator for coloring books. Generate clean SVG with bold black outlines (stroke-width 3-5), fill="none" or fill="white" only — no color fills. White background. Thick, clear lines suitable for printing and coloring with crayons or markers.'
-        : 'You are an SVG illustrator for children\'s storybooks. Generate colorful, friendly SVG scenes with simple shapes, vibrant fills, and clear outlines. Use cheerful, age-appropriate imagery.';
+        ? 'You are an SVG illustrator for coloring books. Generate clean SVG with bold black outlines (stroke-width 3-5), fill="none" or fill="white" only — no color fills. White background. Thick, clear lines suitable for printing and coloring.'
+        : 'You are an SVG illustrator for children\'s storybooks. Generate colorful, friendly SVG scenes with simple shapes, vibrant fills, and clear outlines.';
       const info = typeInfo(project.type);
       const userMsg = `Create an SVG illustration for a ${info.label} page.
-Book title: "${project.title}"
-Theme: ${project.theme}
-Audience: ${project.ageGroup}
+Book title: "${project.title}" | Theme: ${project.theme} | Audience: ${project.ageGroup}
 Page title: "${page.title}"
 Page description: "${page.content || page.title}"
-
 Requirements:
 - viewBox="0 0 400 300", width="400", height="300"
 - Self-contained SVG (no external resources, no scripts)
 ${isColoring
-  ? '- Bold outlines only: stroke="black" stroke-width="3" to stroke-width="5", fill="none" or fill="white"\n- Simple, clear line art perfect for coloring'
-  : '- Colorful fills with stroke outlines\n- Bright, cheerful palette\n- Simple friendly shapes'}
+  ? '- Bold outlines only: stroke="black" stroke-width="3" to "5", fill="none" or fill="white"'
+  : '- Colorful fills, bright palette, simple friendly shapes'}
 - Return ONLY the SVG markup starting with <svg and ending with </svg>`;
 
-      const result = await callClaude(system, userMsg, 4096);
-      const svgMatch = result.match(/<svg[\s\S]*?<\/svg>/i);
-      if (svgMatch) {
-        updatePage(pageId, { illustration: svgMatch[0] });
-        onUseCredit();
+      const withTimeout = (promise, ms) =>
+        Promise.race([
+          promise,
+          new Promise((_, rej) => setTimeout(() => rej(new Error('Generation timed out after 30 seconds. Please try again.')), ms)),
+        ]);
+
+      const extractSvg = (r) => {
+        if (r.status !== 'fulfilled') return null;
+        const m = r.value.match(/<svg[\s\S]*?<\/svg>/i);
+        return m ? m[0] : null;
+      };
+
+      const [r1, r2] = await Promise.allSettled([
+        withTimeout(callClaude(system, userMsg, 4096), 30000),
+        withTimeout(callClaude(system, userMsg, 4096), 30000),
+      ]);
+
+      const svgA = extractSvg(r1);
+      const svgB = extractSvg(r2);
+
+      if (!svgA && !svgB) {
+        const firstErr = r1.status === 'rejected' ? r1.reason?.message : r2.reason?.message;
+        throw new Error(firstErr || 'Both generation attempts failed. Please try again.');
       }
-    } catch {}
+
+      setIllustrationCandidates({ pageId, a: svgA, b: svgB });
+      onUseCredit();
+    } catch (e) {
+      setIllustrationError({ pageId, msg: e.message || 'Generation failed. Please retry.' });
+    }
     setAiLoading((l) => ({ ...l, [key]: false }));
+  };
+
+  const selectIllustration = (svg) => {
+    if (!illustrationCandidates) return;
+    updatePage(illustrationCandidates.pageId, { illustration: svg });
+    setIllustrationCandidates(null);
   };
 
   const downloadSVG = (page) => {
@@ -2147,141 +2190,222 @@ ${isColoring
                     {label}
                   </Btn>
                 ))}
-                <div style={{ position: 'relative', display: 'inline-flex' }}>
-                  <Btn
-                    variant={!isAdmin && credits <= 0 ? 'secondary' : 'outline'}
-                    size="sm"
-                    loading={!!aiLoading[selPage.id + 'illustrate']}
-                    onClick={() => generateIllustration(selPage.id)}
-                    title={
-                      !isAdmin && credits <= 0
-                        ? 'No illustration credits remaining — upgrade to continue'
-                        : `Generate a ${project.type === 'coloring' ? 'coloring book line-art' : 'colorful scene'} illustration`
-                    }
-                  >
-                    {selPage.illustration ? '✦ Regenerate Illustration' : '✦ Generate Illustration'}
-                  </Btn>
-                  {!isAdmin && credits <= 0 && (
-                    <span
-                      style={{
-                        position: 'absolute',
-                        top: -7,
-                        right: -7,
-                        background: T.error,
-                        color: '#fff',
-                        fontSize: 9,
-                        fontWeight: 800,
-                        padding: '1px 6px',
-                        borderRadius: 20,
-                        pointerEvents: 'none',
-                      }}
-                    >
-                      0 left
-                    </span>
-                  )}
-                </div>
               </div>
 
-              {/* Page Preview */}
-              <Field label="Page Preview">
+              {/* Illustration Panel */}
+              <Field label="Page Illustration">
                 {aiLoading[selPage.id + 'illustrate'] ? (
+                  /* Loading skeleton */
+                  <div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 12,
+                        marginBottom: 12,
+                      }}
+                    >
+                      {[1, 2].map((n) => (
+                        <div
+                          key={n}
+                          style={{
+                            flex: 1,
+                            height: 180,
+                            borderRadius: 10,
+                            background: 'linear-gradient(90deg, #F0F0F0 25%, #E8E8E8 50%, #F0F0F0 75%)',
+                            backgroundSize: '200% 100%',
+                            animation: 'shimmer 1.4s infinite',
+                            border: `1px solid ${T.border}`,
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: T.textMuted, fontSize: 13 }}>
+                      <Spinner size={16} />
+                      Generating 2 illustration variations…
+                    </div>
+                  </div>
+                ) : illustrationError?.pageId === selPage.id ? (
+                  /* Error state */
                   <div
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: '18px 22px',
-                      background: T.accentBg,
+                      padding: '16px 18px',
+                      background: T.errorBg,
+                      border: `1px solid ${T.error}40`,
                       borderRadius: 10,
-                      border: `1px solid ${T.accent}40`,
-                      maxWidth: 340,
+                      color: T.error,
+                      fontSize: 13,
                     }}
                   >
-                    <Spinner size={22} />
-                    <span style={{ color: T.accent, fontSize: 13 }}>
-                      Generating {project.type === 'coloring' ? 'line-art' : 'scene'} illustration…
-                    </span>
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      background: '#fff',
-                      borderRadius: 6,
-                      padding: selPage.illustration ? '16px 16px 10px' : '28px 32px',
-                      maxWidth: 340,
-                      boxShadow: '0 6px 28px rgba(0,0,0,0.35)',
-                      aspectRatio: trimAspect,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      position: 'relative',
-                    }}
-                  >
-                    <div style={{ fontSize: 9, color: '#bbb', textAlign: 'center', marginBottom: 8 }}>
-                      {project.trimSize} · {project.interiorStyle}-sided
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 800,
-                        color: '#111',
-                        textAlign: 'center',
-                        marginBottom: 8,
-                        lineHeight: 1.3,
-                      }}
-                    >
-                      {selPage.title}
-                    </div>
-                    {selPage.illustration ? (
-                      <div
-                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
-                        dangerouslySetInnerHTML={{ __html: selPage.illustration }}
-                      />
-                    ) : (
-                      <div style={{ fontSize: 10, color: '#555', lineHeight: 1.7, flex: 1 }}>
-                        {selPage.content || (
-                          <span style={{ color: '#ccc', fontStyle: 'italic' }}>No content yet…</span>
-                        )}
-                      </div>
-                    )}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        bottom: 10,
-                        right: 14,
-                        fontSize: 9,
-                        color: '#ccc',
-                      }}
-                    >
-                      {pages.findIndex((p) => p.id === selPage.id) + 1}
-                    </div>
-                  </div>
-                )}
-
-                {/* Illustration controls */}
-                {selPage.illustration && !aiLoading[selPage.id + 'illustrate'] && (
-                  <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
+                    <div style={{ marginBottom: 10 }}>⚠ {illustrationError.msg}</div>
                     <Btn
                       variant="secondary"
-                      size="xs"
-                      loading={!!aiLoading[selPage.id + 'illustrate']}
-                      onClick={() => generateIllustration(selPage.id)}
+                      size="sm"
+                      onClick={() => { setIllustrationError(null); generateIllustration(selPage.id); }}
                     >
-                      ↺ Regenerate
+                      Retry
                     </Btn>
-                    <Btn variant="secondary" size="xs" onClick={() => downloadSVG(selPage)}>
-                      ↓ SVG
-                    </Btn>
-                    <Btn variant="secondary" size="xs" onClick={() => downloadPNG(selPage)}>
-                      ↓ PNG
-                    </Btn>
-                    <Btn
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => updatePage(selPage.id, { illustration: null })}
-                      style={{ color: T.error }}
+                  </div>
+                ) : illustrationCandidates?.pageId === selPage.id ? (
+                  /* Side-by-side candidate selection */
+                  <div>
+                    <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 12 }}>
+                      Pick your favourite — or regenerate for fresh variations.
+                    </div>
+                    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                      {[illustrationCandidates.a, illustrationCandidates.b].map((svg, idx) =>
+                        svg ? (
+                          <div key={idx} style={{ flex: '1 1 160px', minWidth: 0 }}>
+                            <div
+                              style={{
+                                background: '#fff',
+                                border: `2px solid ${T.border}`,
+                                borderRadius: 10,
+                                overflow: 'hidden',
+                                marginBottom: 8,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: 8,
+                                transition: 'border-color 0.15s',
+                                cursor: 'pointer',
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.borderColor = T.accent)}
+                              onMouseLeave={(e) => (e.currentTarget.style.borderColor = T.border)}
+                              onClick={() => selectIllustration(svg)}
+                              dangerouslySetInnerHTML={{ __html: svg }}
+                            />
+                            <Btn
+                              variant="primary"
+                              size="sm"
+                              style={{ width: '100%', justifyContent: 'center' }}
+                              onClick={() => selectIllustration(svg)}
+                            >
+                              Use this one
+                            </Btn>
+                          </div>
+                        ) : (
+                          <div
+                            key={idx}
+                            style={{
+                              flex: '1 1 160px',
+                              minWidth: 0,
+                              height: 160,
+                              borderRadius: 10,
+                              border: `1px dashed ${T.border}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: T.textFaint,
+                              fontSize: 12,
+                            }}
+                          >
+                            Generation failed
+                          </div>
+                        )
+                      )}
+                    </div>
+                    <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                      <Btn
+                        variant="secondary"
+                        size="sm"
+                        loading={!!aiLoading[selPage.id + 'illustrate']}
+                        onClick={() => generateIllustration(selPage.id)}
+                      >
+                        ↺ Try again
+                      </Btn>
+                      <Btn
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIllustrationCandidates(null)}
+                      >
+                        Dismiss
+                      </Btn>
+                    </div>
+                  </div>
+                ) : selPage.illustration ? (
+                  /* Selected illustration viewer */
+                  <div>
+                    <div
+                      style={{
+                        background: '#fff',
+                        border: `1px solid ${T.border}`,
+                        borderRadius: 10,
+                        overflow: 'hidden',
+                        padding: 12,
+                        marginBottom: 10,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        maxWidth: 340,
+                      }}
+                      dangerouslySetInnerHTML={{ __html: selPage.illustration }}
+                    />
+                    <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                      <Btn
+                        variant="secondary"
+                        size="xs"
+                        loading={!!aiLoading[selPage.id + 'illustrate']}
+                        onClick={() => generateIllustration(selPage.id)}
+                      >
+                        ↺ Regenerate (2 variations)
+                      </Btn>
+                      <Btn variant="secondary" size="xs" onClick={() => downloadSVG(selPage)}>↓ SVG</Btn>
+                      <Btn variant="secondary" size="xs" onClick={() => downloadPNG(selPage)}>↓ PNG</Btn>
+                      <Btn
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => updatePage(selPage.id, { illustration: null })}
+                        style={{ color: T.error }}
+                      >
+                        × Remove
+                      </Btn>
+                    </div>
+                  </div>
+                ) : (
+                  /* Empty — no illustration yet */
+                  <div>
+                    <div
+                      style={{
+                        height: 120,
+                        border: `2px dashed ${T.border}`,
+                        borderRadius: 10,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: T.textMuted,
+                        fontSize: 13,
+                        marginBottom: 12,
+                        background: T.surface2,
+                      }}
                     >
-                      × Remove
-                    </Btn>
+                      <span style={{ fontSize: 28, marginBottom: 8 }}>🎨</span>
+                      No illustration yet
+                    </div>
+                    <div style={{ position: 'relative', display: 'inline-flex' }}>
+                      <Btn
+                        variant={!isAdmin && credits <= 0 ? 'secondary' : 'outline'}
+                        size="sm"
+                        loading={!!aiLoading[selPage.id + 'illustrate']}
+                        onClick={() => generateIllustration(selPage.id)}
+                        title={!isAdmin && credits <= 0 ? 'No credits — upgrade to continue' : 'Generate 2 illustration variations with AI'}
+                      >
+                        ✦ Generate Illustration
+                      </Btn>
+                      {!isAdmin && credits <= 0 && (
+                        <span
+                          style={{
+                            position: 'absolute', top: -7, right: -7,
+                            background: T.error, color: '#fff',
+                            fontSize: 9, fontWeight: 800,
+                            padding: '1px 6px', borderRadius: 20,
+                            pointerEvents: 'none',
+                          }}
+                        >
+                          0 left
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
               </Field>
