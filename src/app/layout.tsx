@@ -12,6 +12,9 @@ export const metadata: Metadata = {
   title: "BookForge — AI-Powered eBook Studio",
   description:
     "Create publish-ready eBooks for Amazon KDP with AI. Coloring books, storybooks, activity books, journals, and more.",
+  other: {
+    "color-scheme": "light",
+  },
 };
 
 export default function RootLayout({
@@ -20,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${jakarta.variable} h-full`}>
+    <html lang="en" className={`${jakarta.variable} h-full`} style={{ colorScheme: 'light' }}>
       <body className="h-full" suppressHydrationWarning style={{ fontFamily: "var(--font-jakarta), sans-serif" }}>
         {children}
       </body>

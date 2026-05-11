@@ -3,6 +3,7 @@
 :root {
   --background: #F9F9F9;
   --foreground: #111111;
+  color-scheme: light;
 }
 
 * {
