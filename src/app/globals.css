@@ -1,11 +1,63 @@
 @import "tailwindcss";
 
-:root {
-  --background: #0f1117;
-  --foreground: #e2e8f0;
+/*
+  Override Tailwind's dark variant to class-based only.
+  This means dark: utilities ONLY apply when a .dark class is present in the DOM.
+  Since we never add .dark, the OS dark mode preference is completely ignored.
+*/
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── KDP Studio AI Design Tokens ───────────────────────────────────────────── */
+@theme {
+  /* Typography */
+  --font-sans: var(--font-dm-sans), 'DM Sans', system-ui, sans-serif;
+
+  /* Brand / Primary (Amazon Yellow) */
+  --color-primary:       #FF9900;
+  --color-primary-hover: #E68A00;
+  --color-primary-light: #FFE4B5;
+  --color-primary-bg:    #FFF8E7;
+
+  /* Backgrounds */
+  --color-bg:            #FFFFFF;
+  --color-bg-secondary:  #F9F9F9;
+  --color-bg-tertiary:   #FFF8E7;
+
+  /* Text */
+  --color-text:          #111111;
+  --color-text-secondary:#555555;
+  --color-text-tertiary: #888888;
+
+  /* Borders */
+  --color-border:        #E5E5E5;
+  --color-border-focus:  #FF9900;
+
+  /* Semantic */
+  --color-success:       #067D62;
+  --color-error:         #D63E3E;
 }
 
-* {
+/* ── Force Light Mode (CRITICAL) ────────────────────────────────────────────── */
+:root {
+  color-scheme: light !important;
+}
+
+/* Ensure OS dark mode never changes our palette */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: light !important;
+  }
+  html,
+  body {
+    background-color: #FFFFFF !important;
+    color: #111111 !important;
+  }
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -14,16 +66,30 @@
 html,
 body {
   height: 100%;
-  background: var(--background);
-  color: var(--foreground);
+  background-color: #FFFFFF;
+  color: #111111;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+/* ── Scrollbar (light theme) ────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
 }
 
+/* ── Animations ─────────────────────────────────────────────────────────────── */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -35,17 +101,62 @@ body {
   }
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
-::-webkit-scrollbar-track {
-  background: transparent;
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
-::-webkit-scrollbar-thumb {
-  background: #2d3148;
-  border-radius: 3px;
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #3d4168;
+
+.animate-fade-in {
+  animation: fadeIn 200ms ease-out both;
+}
+
+.animate-fade-in-scale {
+  animation: fadeInScale 200ms ease-out both;
+}
+
+.animate-spin {
+  animation: spin 700ms linear infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 50%, #F3F4F6 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* ── Focus Ring ─────────────────────────────────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid #FF9900;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Input Focus Border ─────────────────────────────────────────────────────── */
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #FF9900 !important;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 153, 0, 0.15);
 }

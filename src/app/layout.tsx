@@ -1,17 +1,22 @@
-import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
-import "./globals.css";
+import type { Metadata, Viewport } from 'next';
+import { DM_Sans } from 'next/font/google';
+import './globals.css';
 
-const jakarta = Plus_Jakarta_Sans({
-  variable: "--font-jakarta",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700", "800"],
+const dmSans = DM_Sans({
+  variable: '--font-dm-sans',
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
-  title: "BookForge — AI-Powered eBook Studio",
+  title: 'KDP Studio AI — AI-Powered Coloring Book Studio',
   description:
-    "Create publish-ready eBooks for Amazon KDP with AI. Coloring books, storybooks, activity books, journals, and more.",
+    'Create Amazon KDP-ready coloring books with AI. Go from zero to published in under 30 minutes.',
+};
+
+export const viewport: Viewport = {
+  colorScheme: 'light',
 };
 
 export default function RootLayout({
@@ -20,8 +25,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${jakarta.variable} h-full`}>
-      <body className="h-full" style={{ fontFamily: "var(--font-jakarta), sans-serif" }}>
+    <html
+      lang="en"
+      className={dmSans.variable}
+      suppressHydrationWarning
+    >
+      <head>
+        <meta name="color-scheme" content="light" />
+      </head>
+      <body className="font-sans" suppressHydrationWarning>
         {children}
       </body>
     </html>
